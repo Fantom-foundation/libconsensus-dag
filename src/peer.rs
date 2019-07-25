@@ -1,22 +1,14 @@
 use std::collections::HashMap;
 
 use crate::lamport_time::LamportTime;
+use libconsensus::{BaseConsensusPeer, PeerId};
 use serde::{Deserialize, Serialize};
 
-pub(crate) type PeerId = Vec<u8>;
 pub(crate) type Frame = usize;
 pub(crate) type Height = usize;
 
 type GossipList = HashMap<PeerId, LamportTime>;
 type SuspectList = HashMap<PeerId, LamportTime>;
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct BaseConsensusPeer {
-    #[serde(rename = "PubKeyHex")]
-    id: PeerId,
-    #[serde(rename = "NetAddr")]
-    net_addr: String,
-}
 
 // Peer attributes
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

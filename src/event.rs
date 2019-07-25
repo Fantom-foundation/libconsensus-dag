@@ -1,8 +1,9 @@
 use crate::event_hash::EventHash;
 use crate::flag_table::FlagTable;
 use crate::lamport_time::LamportTime;
-use crate::peer::{Frame, PeerId};
+use crate::peer::Frame;
 use crate::transactions::InternalTransaction;
+use libconsensus::PeerId;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

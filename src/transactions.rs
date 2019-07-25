@@ -1,5 +1,5 @@
 // contains TransactionType definition
-use crate::peer::BaseConsensusPeer;
+use libconsensus::BaseConsensusPeer;
 use libconsensus::TransactionType;
 use serde::{Deserialize, Serialize};
 

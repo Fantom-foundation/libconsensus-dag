@@ -2,9 +2,10 @@ use log::{error, warn};
 
 use crate::errors::Error;
 use crate::event_hash::EventHash;
-use crate::peer::{Frame, PeerId};
+use crate::peer::Frame;
 use crate::store::DAGstore;
 use fantom_common_rs::errors::Error::NoneError;
+use libconsensus::PeerId;
 use std::collections::HashMap;
 
 // FlagTable is a map from EventHash into Frame number
