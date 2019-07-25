@@ -1,11 +1,15 @@
 #[global_allocator]
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
+#[macro_use]
+extern crate crossbeam_channel;
 extern crate libconsensus;
 use crate::conf::DAGconfig;
 use libconsensus::Consensus;
 use os_pipe::PipeWriter;
 use std::sync::mpsc::Sender;
+use crossbeam_channel::tick;
+use std::time::Duration;
 
 pub struct DAG<T> {
     conf: DAGconfig,
@@ -46,12 +50,21 @@ where
 
     // Basically run() method spawn Procedure B of DAG0 and execute loop of
     // procedure A of DAG0 until terminated with shutdown()
-    fn run() {
+    fn run(&mut self) {
         // FIXME: need to be implemented!
+        let ticker = tick(Duration::from_millis(self.conf.heartbeat));
+        // DAG0 procedure A loop
+        loop {
+
+            // wait until hearbeat interval expires
+            select !{
+                recv(ticker) -> _ => {},
+            }
+        }
     }
 
     // Terminates procedures A and B of DAG0 started with run() method.
-    fn shutdown() {
+    fn shutdown(&mut self) {
         // FIXME: need to be implemented!
     }
 
