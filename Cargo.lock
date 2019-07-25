@@ -100,24 +100,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dag0"
-version = "0.1.0"
-dependencies = [
- "bincode 1.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "crossbeam-channel 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "fantom-common-rs 0.0.1 (git+https://github.com/Fantom-foundation/fantom-common-rs)",
- "jemallocator 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "libconsensus 0.0.1 (git+https://github.com/Fantom-foundation/libconsensus)",
- "log 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
- "os_pipe 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.94 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.94 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_json 1.0.40 (registry+https://github.com/rust-lang/crates.io-index)",
- "sled 0.24.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "to_vec 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "either"
 version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -209,6 +191,24 @@ dependencies = [
  "os_pipe 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.94 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.94 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "libconsensus-dag"
+version = "0.0.1"
+dependencies = [
+ "bincode 1.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "crossbeam-channel 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "fantom-common-rs 0.0.1 (git+https://github.com/Fantom-foundation/fantom-common-rs)",
+ "jemallocator 0.1.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libconsensus 0.0.1 (git+https://github.com/Fantom-foundation/libconsensus)",
+ "log 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "os_pipe 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.94 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.94 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.40 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sled 0.24.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "to_vec 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
