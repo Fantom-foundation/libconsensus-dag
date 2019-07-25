@@ -6,6 +6,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug)]
 pub enum Error {
     Base(BaseError),
+    AtMaxVecCapacity,
     Bincode(bincode::Error),
     Sled(sled::Error),
 }

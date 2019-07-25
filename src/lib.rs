@@ -5,6 +5,8 @@ static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 extern crate crossbeam_channel;
 extern crate libconsensus;
 use crate::conf::DAGconfig;
+use crate::errors::{Error, Result};
+use crate::transactions::InternalTransaction;
 use crossbeam_channel::tick;
 use libconsensus::Consensus;
 use os_pipe::PipeWriter;
@@ -14,6 +16,7 @@ use std::time::Duration;
 pub struct DAG<T> {
     conf: DAGconfig,
     tx_pool: Vec<T>,
+    internal_tx_pool: Vec<InternalTransaction>,
     callback_pool: Vec<fn(data: T) -> bool>,
     channel_pool: Vec<Sender<T>>,
     pipe_pool: Vec<PipeWriter>,
@@ -27,6 +30,7 @@ impl<D> Default for DAG<D> {
         DAG {
             conf: DAGconfig::default(),
             tx_pool: Vec::with_capacity(1),
+            internal_tx_pool: Vec::with_capacity(1),
             callback_pool: Vec::with_capacity(1),
             channel_pool: Vec::with_capacity(1),
             pipe_pool: Vec::with_capacity(1),
@@ -48,6 +52,7 @@ where
         return DAG {
             conf: cfg,
             tx_pool: Vec::with_capacity(1),
+            internal_tx_pool: Vec::with_capacity(1),
             callback_pool: Vec::with_capacity(1),
             channel_pool: Vec::with_capacity(1),
             pipe_pool: Vec::with_capacity(1),
@@ -123,6 +128,19 @@ where
         }
         self.pipe_pool.push(sender);
         true
+    }
+}
+
+impl<D> DAG<D>
+where
+    D: std::convert::AsRef<u8>,
+{
+    fn send_internal_transaction(&mut self, tx: InternalTransaction) -> Result<()> {
+        if self.internal_tx_pool.len() == std::usize::MAX {
+            return Err(Error::AtMaxVecCapacity);
+        }
+        self.internal_tx_pool.push(tx);
+        Ok(())
     }
 }
 
