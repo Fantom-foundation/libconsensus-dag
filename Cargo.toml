@@ -1,0 +1,20 @@
+[package]
+name = "dag0"
+version = "0.1.0"
+authors = ["Maxim Zakharov <5158255+Maxime2@users.noreply.github.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bincode = "1.0.1"
+jemallocator = "0.1"
+log = "*"
+os_pipe = "0.8.0"
+serde = "=1.0.94"
+serde_derive = "=1.0.94"
+serde_json = "*"
+sled = "*" 
+to_vec = "*"
+libconsensus = { git = "https://github.com/Fantom-foundation/libconsensus" }
+fantom-common-rs = { git = "https://github.com/Fantom-foundation/fantom-common-rs" }
