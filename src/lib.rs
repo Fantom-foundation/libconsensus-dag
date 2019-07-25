@@ -5,10 +5,10 @@ static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 extern crate crossbeam_channel;
 extern crate libconsensus;
 use crate::conf::DAGconfig;
+use crossbeam_channel::tick;
 use libconsensus::Consensus;
 use os_pipe::PipeWriter;
-use std::sync::mpsc::Sender;
-use crossbeam_channel::tick;
+use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::time::Duration;
 
 pub struct DAG<T> {
@@ -17,16 +17,21 @@ pub struct DAG<T> {
     callback_pool: Vec<fn(data: T) -> bool>,
     channel_pool: Vec<Sender<T>>,
     pipe_pool: Vec<PipeWriter>,
+    quit_rx: Receiver<()>,
+    quit_tx: Sender<()>,
 }
 
 impl<D> Default for DAG<D> {
     fn default() -> DAG<D> {
+        let (tx, rx) = mpsc::channel();
         DAG {
             conf: DAGconfig::default(),
             tx_pool: Vec::with_capacity(1),
             callback_pool: Vec::with_capacity(1),
             channel_pool: Vec::with_capacity(1),
             pipe_pool: Vec::with_capacity(1),
+            quit_rx: rx,
+            quit_tx: tx,
         }
     }
 }
@@ -39,12 +44,15 @@ where
     type Data = D;
 
     fn new(cfg: DAGconfig) -> DAG<D> {
+        let (tx, rx) = mpsc::channel();
         return DAG {
             conf: cfg,
             tx_pool: Vec::with_capacity(1),
             callback_pool: Vec::with_capacity(1),
             channel_pool: Vec::with_capacity(1),
             pipe_pool: Vec::with_capacity(1),
+            quit_rx: rx,
+            quit_tx: tx,
         };
     }
 
@@ -55,9 +63,18 @@ where
         let ticker = tick(Duration::from_millis(self.conf.heartbeat));
         // DAG0 procedure A loop
         loop {
+            // check if shutdown() has been called
+            match self.quit_rx.try_recv() {
+                Ok(_) | Err(TryRecvError::Disconnected) => {
+                    // terminating
+                    // FIXME: need to be implemented
+                    break;
+                }
+                Err(TryRecvError::Empty) => {}
+            }
 
             // wait until hearbeat interval expires
-            select !{
+            select! {
                 recv(ticker) -> _ => {},
             }
         }
@@ -65,7 +82,7 @@ where
 
     // Terminates procedures A and B of DAG0 started with run() method.
     fn shutdown(&mut self) {
-        // FIXME: need to be implemented!
+        let _ = self.quit_tx.send(());
     }
 
     fn send_transaction(&mut self, data: Self::Data) -> bool {
