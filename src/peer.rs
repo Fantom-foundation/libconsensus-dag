@@ -1,8 +1,11 @@
 use std::collections::HashMap;
 
+use crate::errors::{Error, Result};
 use crate::lamport_time::LamportTime;
 use libconsensus::{BaseConsensusPeer, PeerId};
 use serde::{Deserialize, Serialize};
+use std::fs::File;
+use std::io::Read;
 
 pub(crate) type Frame = usize;
 pub(crate) type Height = usize;
@@ -46,17 +49,26 @@ impl Default for PeerList {
 }
 
 impl PeerList {
-    fn add(&mut self, p: BaseConsensusPeer) -> bool {
+    fn get_peers_from_file(&mut self, json_peer_path: String) -> Result<()> {
+        let mut file = File::open(json_peer_path)?;
+        let mut data = String::new();
+        file.read_to_string(&mut data)?;
+        let mut v: Vec<BaseConsensusPeer> = serde_json::from_str(&data)?;
+        self.peers.append(&mut v);
+        Ok(())
+    }
+
+    pub fn add(&mut self, p: BaseConsensusPeer) -> Result<()> {
         if self.peers.len() == std::usize::MAX {
-            return false;
+            return Err(Error::AtMaxVecCapacity);
         }
         self.peers.push(p);
         self.n = self.peers.len();
         self.r = self.n >> 1;
-        true
+        Ok(())
     }
 
-    fn next_peer(&mut self) -> BaseConsensusPeer {
+    pub fn next_peer(&mut self) -> BaseConsensusPeer {
         // we assume the very first peer in the vector is one
         // cotrresponding to the current node, so the value of `current`
         // is always 0 and omitted here.
