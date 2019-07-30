@@ -6,6 +6,8 @@ extern crate crossbeam_channel;
 extern crate libconsensus;
 use crate::conf::DAGconfig;
 use crate::errors::{Error, Result};
+use crate::lamport_time::LamportTime;
+use crate::peer::Frame;
 use crate::transactions::InternalTransaction;
 use crossbeam_channel::tick;
 use libconsensus::Consensus;
@@ -13,6 +15,7 @@ use os_pipe::PipeWriter;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::time::Duration;
 
+// DAG node structure
 pub struct DAG<T> {
     conf: DAGconfig,
     tx_pool: Vec<T>,
@@ -22,6 +25,9 @@ pub struct DAG<T> {
     pipe_pool: Vec<PipeWriter>,
     quit_rx: Receiver<()>,
     quit_tx: Sender<()>,
+    lamport_time: LamportTime,
+    current_frame: Frame,
+    last_finalised_frame: Option<Frame>,
 }
 
 impl<D> Default for DAG<D> {
@@ -36,6 +42,9 @@ impl<D> Default for DAG<D> {
             pipe_pool: Vec::with_capacity(1),
             quit_rx: rx,
             quit_tx: tx,
+            lamport_time: 0,
+            current_frame: 0,
+            last_finalised_frame: None,
         }
     }
 }
@@ -58,6 +67,9 @@ where
             pipe_pool: Vec::with_capacity(1),
             quit_rx: rx,
             quit_tx: tx,
+            lamport_time: 0,
+            current_frame: 0,
+            last_finalised_frame: None,
         };
     }
 

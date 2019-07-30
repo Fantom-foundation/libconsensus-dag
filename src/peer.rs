@@ -21,17 +21,21 @@ pub struct DAG0Peer {
     #[serde(rename = "NetAddr")]
     net_addr: String,
     #[serde(skip, default)]
-    lamport_time: LamportTime,
-    #[serde(skip, default)]
-    height: u64,
-    #[serde(skip, default)]
-    current_frame: Frame,
-    #[serde(skip, default)]
-    last_finalised_frame: Frame,
+    height: Height,
+}
+
+impl From<BaseConsensusPeer> for DAG0Peer {
+    fn from(bp: BaseConsensusPeer) -> DAG0Peer {
+        DAG0Peer {
+            id: bp.id,
+            net_addr: bp.net_addr,
+            height: 0,
+        }
+    }
 }
 
 pub(crate) struct PeerList {
-    peers: Vec<BaseConsensusPeer>,
+    peers: Vec<DAG0Peer>,
     // number of peers; the size of the peer list
     n: usize,
     // round robin number
@@ -53,7 +57,7 @@ impl PeerList {
         let mut file = File::open(json_peer_path)?;
         let mut data = String::new();
         file.read_to_string(&mut data)?;
-        let mut v: Vec<BaseConsensusPeer> = serde_json::from_str(&data)?;
+        let mut v: Vec<DAG0Peer> = serde_json::from_str(&data)?;
         self.peers.append(&mut v);
         Ok(())
     }
@@ -62,13 +66,13 @@ impl PeerList {
         if self.peers.len() == std::usize::MAX {
             return Err(Error::AtMaxVecCapacity);
         }
-        self.peers.push(p);
+        self.peers.push(p.into());
         self.n = self.peers.len();
         self.r = self.n >> 1;
         Ok(())
     }
 
-    pub fn next_peer(&mut self) -> BaseConsensusPeer {
+    pub fn next_peer(&mut self) -> DAG0Peer {
         // we assume the very first peer in the vector is one
         // cotrresponding to the current node, so the value of `current`
         // is always 0 and omitted here.
