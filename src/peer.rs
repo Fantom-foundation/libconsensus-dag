@@ -1,3 +1,4 @@
+use libconsensus::errors::Error::AtMaxVecCapacity;
 use std::collections::HashMap;
 
 use crate::errors::{Error, Result};
@@ -64,7 +65,7 @@ impl PeerList {
 
     pub fn add(&mut self, p: BaseConsensusPeer) -> Result<()> {
         if self.peers.len() == std::usize::MAX {
-            return Err(Error::AtMaxVecCapacity);
+            return Err(Error::Base(AtMaxVecCapacity));
         }
         self.peers.push(p.into());
         self.n = self.peers.len();

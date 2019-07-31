@@ -4,7 +4,6 @@ use crate::errors::Error;
 use crate::event_hash::EventHash;
 use crate::peer::Frame;
 use crate::store::DAGstore;
-use fantom_common_rs::errors::Error::NoneError;
 use libconsensus::PeerId;
 use std::collections::HashMap;
 
@@ -68,7 +67,7 @@ fn derive_creator_table<S: DAGstore>(store: &mut S, ft: &FlagTable) -> CreatorFl
     let mut result = CreatorFlagTable::new();
     for (key, value) in ft.iter() {
         match store.get_event(key) {
-            Err(Error::Base(NoneError)) => warn!("Event {:?} not found", key),
+            Err(Error::Base(none_error!())) => warn!("Event {:?} not found", key),
             Err(e) => error!("Error {:?} encountered while retrieving event {:?}", e, key),
             Ok(e) => match result.get(&e.creator) {
                 Some(frame) => {

@@ -4,7 +4,6 @@ use crate::event::Event;
 use crate::event_hash::EventHash;
 use crate::store::*;
 use bincode::{deserialize, serialize};
-use fantom_common_rs::errors::Error::NoneError;
 //use log::warn;
 use crate::errors::{Error, Result};
 use crate::flag_table::FlagTable;
@@ -52,9 +51,8 @@ impl DAGstore for SledStore {
     fn get_event(&mut self, ex: &EventHash) -> Result<Event> {
         let key = ex.to_vec();
         match self.event.get(&*key)? {
-            //            Some(x) => Ok(deserialize(&x)? as Event),
             Some(x) => Ok(deserialize::<Event>(&x)?),
-            None => Err(Error::Base(NoneError)),
+            None => Err(Error::Base(none_error!())),
         }
     }
 
@@ -72,7 +70,7 @@ impl DAGstore for SledStore {
         let key = ex.to_vec();
         match self.flag_table.get(&*key)? {
             Some(x) => Ok(deserialize::<FlagTable>(&x)?),
-            None => Err(Error::Base(NoneError)),
+            None => Err(Error::Base(none_error!())),
         }
     }
 }

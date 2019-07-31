@@ -1,12 +1,10 @@
-use fantom_common_rs::errors::Error as BaseError;
-//use bincode::Error;
+use libconsensus::errors::Error as BaseError;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug)]
 pub enum Error {
     Base(BaseError),
-    AtMaxVecCapacity,
     Bincode(bincode::Error),
     Sled(sled::Error),
     Io(std::io::Error),
@@ -38,5 +36,12 @@ impl From<serde_json::error::Error> for Error {
     #[inline]
     fn from(json_error: serde_json::error::Error) -> Error {
         Error::SerdeJson(json_error)
+    }
+}
+
+impl From<BaseError> for Error {
+    #[inline]
+    fn from(b: BaseError) -> Error {
+        Error::Base(b)
     }
 }

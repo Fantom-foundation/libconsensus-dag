@@ -3,6 +3,7 @@ static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 #[macro_use]
 extern crate crossbeam_channel;
+#[macro_use]
 extern crate libconsensus;
 use crate::conf::DAGconfig;
 use crate::errors::{Error, Result};
@@ -10,6 +11,7 @@ use crate::lamport_time::LamportTime;
 use crate::peer::Frame;
 use crate::transactions::InternalTransaction;
 use crossbeam_channel::tick;
+use libconsensus::errors::Error::AtMaxVecCapacity;
 use libconsensus::Consensus;
 use os_pipe::PipeWriter;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
@@ -149,7 +151,7 @@ where
 {
     fn send_internal_transaction(&mut self, tx: InternalTransaction) -> Result<()> {
         if self.internal_tx_pool.len() == std::usize::MAX {
-            return Err(Error::AtMaxVecCapacity);
+            return Err(Error::Base(AtMaxVecCapacity));
         }
         self.internal_tx_pool.push(tx);
         Ok(())
