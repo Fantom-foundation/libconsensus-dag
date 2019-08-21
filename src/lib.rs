@@ -19,55 +19,29 @@ use std::time::Duration;
 
 // DAG node structure
 pub struct DAG<T> {
-    conf: DAGconfig,
+    conf: DAGconfig<T>,
     tx_pool: Vec<T>,
     internal_tx_pool: Vec<InternalTransaction>,
-    callback_pool: Vec<fn(data: T) -> bool>,
-    channel_pool: Vec<Sender<T>>,
-    pipe_pool: Vec<PipeWriter>,
-    quit_rx: Receiver<()>,
     quit_tx: Sender<()>,
     lamport_time: LamportTime,
     current_frame: Frame,
     last_finalised_frame: Option<Frame>,
 }
 
-impl<D> Default for DAG<D> {
-    fn default() -> DAG<D> {
-        let (tx, rx) = mpsc::channel();
-        DAG {
-            conf: DAGconfig::default(),
-            tx_pool: Vec::with_capacity(1),
-            internal_tx_pool: Vec::with_capacity(1),
-            callback_pool: Vec::with_capacity(1),
-            channel_pool: Vec::with_capacity(1),
-            pipe_pool: Vec::with_capacity(1),
-            quit_rx: rx,
-            quit_tx: tx,
-            lamport_time: 0,
-            current_frame: 0,
-            last_finalised_frame: None,
-        }
-    }
-}
-
 impl<D> Consensus for DAG<D>
 where
     D: std::convert::AsRef<u8>,
 {
-    type Configuration = DAGconfig;
+    type Configuration = DAGconfig<D>;
     type Data = D;
 
-    fn new(cfg: DAGconfig) -> DAG<D> {
+    fn new(mut cfg: DAGconfig<D>) -> DAG<D> {
         let (tx, rx) = mpsc::channel();
+        cfg.set_quit_rx(rx);
         return DAG {
             conf: cfg,
             tx_pool: Vec::with_capacity(1),
             internal_tx_pool: Vec::with_capacity(1),
-            callback_pool: Vec::with_capacity(1),
-            channel_pool: Vec::with_capacity(1),
-            pipe_pool: Vec::with_capacity(1),
-            quit_rx: rx,
             quit_tx: tx,
             lamport_time: 0,
             current_frame: 0,
@@ -83,13 +57,10 @@ where
         // DAG0 procedure A loop
         loop {
             // check if shutdown() has been called
-            match self.quit_rx.try_recv() {
-                Ok(_) | Err(TryRecvError::Disconnected) => {
-                    // terminating
-                    // FIXME: need to be implemented
-                    break;
-                }
-                Err(TryRecvError::Empty) => {}
+            if self.conf.check_quit() {
+                // terminating
+                // FIXME: need to be implemented
+                break;
             }
 
             // wait until hearbeat interval expires
@@ -110,37 +81,6 @@ where
             return false;
         }
         self.tx_pool.push(data);
-        true
-    }
-
-    fn register_callback(&mut self, callback: fn(data: Self::Data) -> bool) -> bool {
-        // Vec::push() panics when number of elements overflows `usize`
-        if self.callback_pool.len() == std::usize::MAX {
-            return false;
-        }
-        self.callback_pool.push(callback);
-        true
-    }
-
-    fn set_callback_timeout(&mut self, timeout: u64) {
-        self.conf.callback_timeout = timeout;
-    }
-
-    fn register_channel(&mut self, sender: Sender<Self::Data>) -> bool {
-        // Vec::push() panics when number of elements overflows `usize`
-        if self.channel_pool.len() == std::usize::MAX {
-            return false;
-        }
-        self.channel_pool.push(sender);
-        true
-    }
-
-    fn register_os_pipe(&mut self, sender: PipeWriter) -> bool {
-        // Vec::push() panics when number of elements overflows `usize`
-        if self.pipe_pool.len() == std::usize::MAX {
-            return false;
-        }
-        self.pipe_pool.push(sender);
         true
     }
 }
