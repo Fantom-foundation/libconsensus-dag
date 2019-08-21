@@ -41,7 +41,7 @@ impl DAGstore for SledStore {
     fn set_event(&mut self, e: Event) -> Result<()> {
         let key = e.hash.clone().to_vec();
         let e_bytes = serialize(&e)?;
-        self.event.set(key, e_bytes)?;
+        self.event.insert(key, e_bytes)?;
         if self.sync {
             self.event.flush()?;
         }
@@ -59,7 +59,7 @@ impl DAGstore for SledStore {
     fn set_flag_table(&mut self, ex: &EventHash, ft: FlagTable) -> Result<()> {
         let key = ex.clone().to_vec();
         let e_bytes = serialize(&ft)?;
-        self.flag_table.set(key, e_bytes)?;
+        self.flag_table.insert(key, e_bytes)?;
         if self.sync {
             self.flag_table.flush()?;
         }
