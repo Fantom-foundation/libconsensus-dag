@@ -31,7 +31,7 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 // DAG node structure
-pub struct DAG<'a, T, TCreq: TransportConfiguration<SyncReq>> {
+pub struct DAG<'a, T> {
     conf: Arc<Mutex<DAGconfig<T>>>,
     listener_handle: Option<JoinHandle<()>>,
     procA_handle: Option<JoinHandle<()>>,
@@ -42,8 +42,13 @@ pub struct DAG<'a, T, TCreq: TransportConfiguration<SyncReq>> {
     lamport_time: LamportTime,
     current_frame: Frame,
     last_finalised_frame: Option<Frame>,
-    sync_request_transport:
-        &'a (dyn Transport<PeerId, SyncReq, Error, DAGPeerList, TCreq> + 'static),
+    sync_request_transport: &'a (dyn Transport<
+        PeerId,
+        SyncReq,
+        Error,
+        DAGPeerList,
+        Configuration = (dyn TransportConfiguration<SyncReq>),
+    > + 'a),
 }
 
 fn listener<Data: 'static>(cfg_mutexed: Arc<Mutex<DAGconfig<Data>>>)
@@ -74,22 +79,21 @@ fn procedureA<D>(config: Arc<Mutex<DAGconfig<D>>>) {}
 
 fn procedureB<D>(config: Arc<Mutex<DAGconfig<D>>>) {}
 
-impl<D, TCreq> Consensus<D> for DAG<'_, D, TCreq>
+impl<D> Consensus<D> for DAG<'_, D>
 where
     D: Serialize + DeserializeOwned + Send + Clone + 'static,
-    TCreq: TransportConfiguration<sync::SyncReq>,
-    libtransport_tcp::TCPtransport<sync::SyncReq>: libtransport::Transport<
-        std::vec::Vec<u8>,
-        sync::SyncReq,
-        errors::Error,
-        peer::DAGPeerList,
-        TCreq,
-    >,
+    //libtransport_tcp::TCPtransport<sync::SyncReq>: libtransport::Transport<
+    //    std::vec::Vec<u8>,
+    //    sync::SyncReq,
+    //    errors::Error,
+    //    peer::DAGPeerList,
+    //    dyn TransportConfiguration<SyncReq>,
+    //>,
 {
     type Configuration = DAGconfig<D>;
     //    type Data = D;
 
-    fn new(mut cfg: DAGconfig<D>) -> DAG<'static, D, TCreq> {
+    fn new(mut cfg: DAGconfig<D>) -> DAG<'static, D> {
         let (tx, rx) = mpsc::channel();
         cfg.set_quit_rx(rx);
         let cfg_mutexed = Arc::new(Mutex::new(cfg));
@@ -104,7 +108,7 @@ where
                 TCP => {
                     let mut tcp_cfg =
                         TCPtransportCfg::<SyncReq>::new(cfg.request_addr.clone()).unwrap();
-                    TCPtransport::new(tcp_cfg)
+                    TCPtransport::<SyncReq>::new(tcp_cfg)
                 }
                 Unknown => panic!("unknown transport"),
             }
@@ -139,19 +143,13 @@ where
     }
 }
 
-impl<D, TCreq> Drop for DAG<'_, D, TCreq>
-where
-    TCreq: TransportConfiguration<SyncReq>,
-{
+impl<D> Drop for DAG<'_, D> {
     fn drop(&mut self) {
         self.quit_tx.send(()).unwrap();
     }
 }
 
-impl<D, TCreq> DAG<'_, D, TCreq>
-where
-    TCreq: TransportConfiguration<SyncReq>,
-{
+impl<D> DAG<'_, D> {
     // Basically run() method spawn Procedure B of DAG0 and execute loop of
     // procedure A of DAG0 until terminated with shutdown()
     fn run(&mut self) {
@@ -188,12 +186,11 @@ where
     }
 }
 
-impl<D, TCreq> Unpin for DAG<'_, D, TCreq> where TCreq: TransportConfiguration<SyncReq> {}
+impl<D> Unpin for DAG<'_, D> {}
 
-impl<Data, TCreq> Stream for DAG<'_, Data, TCreq>
+impl<Data> Stream for DAG<'_, Data>
 where
     Data: Serialize + DeserializeOwned,
-    TCreq: TransportConfiguration<SyncReq>,
 {
     type Item = Data;
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
