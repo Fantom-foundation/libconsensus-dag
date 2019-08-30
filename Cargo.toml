@@ -16,4 +16,7 @@ serde_json = "*"
 sled = "*" 
 to_vec = "*"
 libconsensus = { git = "https://github.com/Fantom-foundation/libconsensus" }
+libtransport = { git = "https://github.com/Fantom-foundation/libtransport" }
+libtransport-tcp = { git = "https://github.com/Fantom-foundation/libtransport-tcp" }
 libcommon-rs = { git = "https://github.com/Fantom-foundation/libcommon-rs" }
+futures-preview = { version = "=0.3.0-alpha.17", features = ["compat"] }
