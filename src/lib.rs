@@ -19,8 +19,8 @@ use futures::task::Poll;
 use libconsensus::errors::Error::AtMaxVecCapacity;
 use libconsensus::errors::Result as BaseResult;
 use libconsensus::{Consensus, PeerId};
-use libtransport::{Transport, TransportConfiguration};
-use libtransport_tcp::{TCPtransport, TCPtransportCfg};
+use libtransport::Transport;
+use libtransport_tcp::TCPtransport;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::pin::Pin;
@@ -42,13 +42,7 @@ pub struct DAG<'a, T> {
     lamport_time: LamportTime,
     current_frame: Frame,
     last_finalised_frame: Option<Frame>,
-    sync_request_transport: &'a (dyn Transport<
-        PeerId,
-        SyncReq,
-        Error,
-        DAGPeerList,
-        Configuration = (dyn TransportConfiguration<SyncReq>),
-    > + 'a),
+    sync_request_transport: &'a (dyn Transport<PeerId, SyncReq, Error, DAGPeerList> + 'a),
 }
 
 fn listener<Data: 'static>(cfg_mutexed: Arc<Mutex<DAGconfig<Data>>>)
@@ -93,7 +87,7 @@ where
     type Configuration = DAGconfig<D>;
     //    type Data = D;
 
-    fn new(mut cfg: DAGconfig<D>) -> DAG<'static, D> {
+    fn new(mut cfg: DAGconfig<D>) -> BaseResult<DAG<'static, D>> {
         let (tx, rx) = mpsc::channel();
         cfg.set_quit_rx(rx);
         let cfg_mutexed = Arc::new(Mutex::new(cfg));
@@ -106,14 +100,14 @@ where
         let mut sr_transport = {
             match cfg.transport_type {
                 TCP => {
-                    let mut tcp_cfg =
-                        TCPtransportCfg::<SyncReq>::new(cfg.request_addr.clone()).unwrap();
-                    TCPtransport::<SyncReq>::new(tcp_cfg)
+                    //                    let mut tcp_cfg =
+                    //                        TCPtransportCfg::<SyncReq>::new(cfg.request_addr.clone()).unwrap();
+                    TCPtransport::<SyncReq>::new(cfg.request_addr.clone())?
                 }
                 Unknown => panic!("unknown transport"),
             }
         };
-        return DAG {
+        return Ok(DAG {
             conf: cfg_mutexed,
             tx_pool: Vec::with_capacity(1),
             internal_tx_pool: Vec::with_capacity(1),
@@ -125,12 +119,13 @@ where
             sync_request_transport: &sr_transport,
             procA_handle: Some(procA_handle),
             procB_handle: Some(procB_handle),
-        };
+        });
     }
 
     // Terminates procedures A and B of DAG0 started with run() method.
-    fn shutdown(&mut self) {
+    fn shutdown(&mut self) -> BaseResult<()> {
         let _ = self.quit_tx.send(());
+        Ok(())
     }
 
     fn send_transaction(&mut self, data: D) -> BaseResult<()> {
