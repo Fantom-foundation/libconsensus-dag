@@ -3,19 +3,26 @@ use crate::flag_table::FlagTable;
 use crate::lamport_time::LamportTime;
 use crate::peer::Frame;
 use crate::transactions::InternalTransaction;
-use libconsensus::PeerId;
+use libcommon_rs::peer::PeerId;
 use serde::{Deserialize, Serialize};
 
+trait Stub {}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub(crate) struct Event {
-    pub(crate) creator: PeerId,
+pub(crate) struct Event<P>
+where
+    P: PeerId,
+{
+    pub(crate) creator: P,
     height: u64,
     self_parent: EventHash,
     other_parent: EventHash,
     lamport_timestamp: LamportTime,
     transactions: Vec<Vec<u8>>,
-    internal_transactions: Vec<InternalTransaction>,
+    internal_transactions: Vec<InternalTransaction<P>>,
     pub(crate) hash: EventHash,
     frame_number: Frame,
     ft: FlagTable,
 }
+
+impl<P> Stub for Event<P> where P: PeerId {}

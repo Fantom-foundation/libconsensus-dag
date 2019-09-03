@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use crate::errors::{Error, Result};
 use crate::lamport_time::LamportTime;
 use core::slice::{Iter, IterMut};
-use libcommon_rs::peer::{Peer, PeerList};
-use libconsensus::{BaseConsensusPeer, PeerId};
+use libcommon_rs::peer::{Peer, PeerId, PeerList};
+use libconsensus::BaseConsensusPeer;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Read;
@@ -14,22 +14,28 @@ use std::ops::{Index, IndexMut};
 pub(crate) type Frame = usize;
 pub(crate) type Height = usize;
 
-pub(crate) type GossipList = HashMap<PeerId, LamportTime>;
-pub(crate) type SuspectList = HashMap<PeerId, LamportTime>;
+pub(crate) type GossipList<PeerId> = HashMap<PeerId, LamportTime>;
+pub(crate) type SuspectList<PeerId> = HashMap<PeerId, LamportTime>;
 
 // Peer attributes
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DAGPeer {
+pub struct DAGPeer<P>
+where
+    P: PeerId,
+{
     #[serde(rename = "PubKeyHex")]
-    id: PeerId,
+    id: P,
     #[serde(rename = "NetAddr")]
     net_addr: String,
     #[serde(skip, default)]
     height: Height,
 }
 
-impl From<BaseConsensusPeer> for DAGPeer {
-    fn from(bp: BaseConsensusPeer) -> DAGPeer {
+impl<P> From<BaseConsensusPeer<P>> for DAGPeer<P>
+where
+    P: PeerId,
+{
+    fn from(bp: BaseConsensusPeer<P>) -> DAGPeer<P> {
         DAGPeer {
             id: bp.id,
             net_addr: bp.net_addr,
@@ -38,15 +44,18 @@ impl From<BaseConsensusPeer> for DAGPeer {
     }
 }
 
-impl Peer<PeerId> for DAGPeer {
-    fn new(id: PeerId, net_addr: String) -> Self {
+impl<P> Peer<P> for DAGPeer<P>
+where
+    P: PeerId,
+{
+    fn new(id: P, net_addr: String) -> Self {
         DAGPeer {
             id,
             net_addr,
             height: 0,
         }
     }
-    fn get_id(&self) -> PeerId {
+    fn get_id(&self) -> P {
         self.id.clone()
     }
     fn get_net_addr(&self) -> String {
@@ -54,16 +63,22 @@ impl Peer<PeerId> for DAGPeer {
     }
 }
 
-pub(crate) struct DAGPeerList {
-    peers: Vec<DAGPeer>,
+pub(crate) struct DAGPeerList<P>
+where
+    P: PeerId,
+{
+    peers: Vec<DAGPeer<P>>,
     // number of peers; the size of the peer list
     n: usize,
     // round robin number
     r: usize,
 }
 
-impl Default for DAGPeerList {
-    fn default() -> DAGPeerList {
+impl<P> Default for DAGPeerList<P>
+where
+    P: PeerId,
+{
+    fn default() -> DAGPeerList<P> {
         DAGPeerList {
             peers: Vec::with_capacity(5),
             n: 0,
@@ -72,21 +87,30 @@ impl Default for DAGPeerList {
     }
 }
 
-impl Index<usize> for DAGPeerList {
-    type Output = DAGPeer;
+impl<P> Index<usize> for DAGPeerList<P>
+where
+    P: PeerId,
+{
+    type Output = DAGPeer<P>;
     fn index(&self, index: usize) -> &Self::Output {
         &self.peers[index]
     }
 }
 
-impl IndexMut<usize> for DAGPeerList {
+impl<P> IndexMut<usize> for DAGPeerList<P>
+where
+    P: PeerId,
+{
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.peers[index]
     }
 }
 
-impl PeerList<PeerId, Error> for DAGPeerList {
-    type P = DAGPeer;
+impl<Pid> PeerList<Pid, Error> for DAGPeerList<Pid>
+where
+    Pid: PeerId,
+{
+    type P = DAGPeer<Pid>;
     fn new() -> Self {
         DAGPeerList {
             peers: Vec::with_capacity(5),
@@ -98,12 +122,12 @@ impl PeerList<PeerId, Error> for DAGPeerList {
         let mut file = File::open(json_peer_path)?;
         let mut data = String::new();
         file.read_to_string(&mut data)?;
-        let mut v: Vec<DAGPeer> = serde_json::from_str(&data)?;
+        let mut v: Vec<DAGPeer<Pid>> = serde_json::from_str(&data)?;
         self.peers.append(&mut v);
         Ok(())
     }
 
-    fn add(&mut self, p: DAGPeer) -> Result<()> {
+    fn add(&mut self, p: DAGPeer<Pid>) -> Result<()> {
         if self.peers.len() == std::usize::MAX {
             return Err(Error::Base(AtMaxVecCapacity));
         }
@@ -120,8 +144,11 @@ impl PeerList<PeerId, Error> for DAGPeerList {
     }
 }
 
-impl DAGPeerList {
-    pub fn next_peer(&mut self) -> DAGPeer {
+impl<P> DAGPeerList<P>
+where
+    P: PeerId,
+{
+    pub fn next_peer(&mut self) -> DAGPeer<P> {
         // we assume the very first peer in the vector is one
         // cotrresponding to the current node, so the value of `current`
         // is always 0 and omitted here.

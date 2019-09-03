@@ -4,13 +4,13 @@ use crate::errors::Error;
 use crate::event_hash::EventHash;
 use crate::peer::Frame;
 use crate::store::DAGstore;
-use libconsensus::PeerId;
+use libcommon_rs::peer::PeerId;
 use std::collections::HashMap;
 
 // FlagTable is a map from EventHash into Frame number
 pub(crate) type FlagTable = HashMap<EventHash, Frame>;
 // CreatorFlagTable is a map from PeerId into Frame number (Frame)
-pub(crate) type CreatorFlagTable = HashMap<PeerId, Frame>;
+pub(crate) type CreatorFlagTable<PeerId> = HashMap<PeerId, Frame>;
 
 // Strict flag table merging procedure takes two flag tables and the frame number
 // and forms a new flag table which contains only those entries from any of source
@@ -63,7 +63,10 @@ fn open_merge_flag_table(first: &FlagTable, second: &FlagTable, frame_number: Fr
 // This procedure takes a store and a flag table as input
 // and produces a map which stores creator's hashes of visible roots;
 // for each root it stores minimal frame number.
-fn derive_creator_table<S: DAGstore>(store: &mut S, ft: &FlagTable) -> CreatorFlagTable {
+fn derive_creator_table<P: PeerId, S: DAGstore<P>>(
+    store: &mut S,
+    ft: &FlagTable,
+) -> CreatorFlagTable<P> {
     let mut result = CreatorFlagTable::new();
     for (key, value) in ft.iter() {
         match store.get_event(key) {

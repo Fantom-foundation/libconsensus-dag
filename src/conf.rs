@@ -2,13 +2,16 @@
 
 use crate::peer::DAGPeerList;
 use futures::task::Waker;
-use libcommon_rs::peer::PeerList;
+use libcommon_rs::peer::{PeerId, PeerList};
 use libconsensus::ConsensusConfiguration;
 use libtransport::TransportType;
 use std::marker::PhantomData;
 use std::sync::mpsc::{Receiver, TryRecvError};
 
-pub struct DAGconfig<Data> {
+pub struct DAGconfig<P, Data>
+where
+    P: PeerId,
+{
     pub(crate) request_addr: String,
     pub(crate) reply_addr: String,
     shutdown: bool,
@@ -17,11 +20,14 @@ pub struct DAGconfig<Data> {
     pub(crate) heartbeat: u64,
     pub(crate) quit_rx: Option<Receiver<()>>,
     pub(crate) waker: Option<Waker>,
-    peers: DAGPeerList,
+    peers: DAGPeerList<P>,
     phantom: PhantomData<Data>,
 }
 
-impl<Data> DAGconfig<Data> {
+impl<P, Data> DAGconfig<P, Data>
+where
+    P: PeerId,
+{
     pub fn set_quit_rx(&mut self, rx: Receiver<()>) {
         self.quit_rx = Some(rx);
     }
@@ -39,7 +45,10 @@ impl<Data> DAGconfig<Data> {
     }
 }
 
-impl<Data> ConsensusConfiguration<Data> for DAGconfig<Data> {
+impl<P, Data> ConsensusConfiguration<Data> for DAGconfig<P, Data>
+where
+    P: PeerId,
+{
     fn new() -> Self {
         return DAGconfig {
             request_addr: "localhost:9000".to_string(),

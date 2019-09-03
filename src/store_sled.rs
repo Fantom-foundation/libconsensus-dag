@@ -7,6 +7,7 @@ use bincode::{deserialize, serialize};
 //use log::warn;
 use crate::errors::{Error, Result};
 use crate::flag_table::FlagTable;
+use libcommon_rs::peer::PeerId;
 
 use std::path::Path;
 use to_vec::ToVec;
@@ -17,7 +18,10 @@ pub(crate) struct SledStore {
     sync: bool,
 }
 
-impl DAGstore for SledStore {
+impl<P> DAGstore<P> for SledStore
+where
+    P: PeerId,
+{
     // function new() creates a new Sled based Storage
     fn new(base_path: &str) -> Result<SledStore> {
         let event_config = sled::ConfigBuilder::new()
@@ -38,7 +42,7 @@ impl DAGstore for SledStore {
 
     // function set_event() writes Event into storage; returns True on success and
     // False on failure
-    fn set_event(&mut self, e: Event) -> Result<()> {
+    fn set_event(&mut self, e: Event<P>) -> Result<()> {
         let key = e.hash.clone().to_vec();
         let e_bytes = serialize(&e)?;
         self.event.insert(key, e_bytes)?;
@@ -48,10 +52,10 @@ impl DAGstore for SledStore {
         Ok(())
     }
 
-    fn get_event(&mut self, ex: &EventHash) -> Result<Event> {
+    fn get_event(&mut self, ex: &EventHash) -> Result<Event<P>> {
         let key = ex.to_vec();
         match self.event.get(&*key)? {
-            Some(x) => Ok(deserialize::<Event>(&x)?),
+            Some(x) => Ok(deserialize::<Event<P>>(&x)?),
             None => Err(Error::Base(none_error!())),
         }
     }

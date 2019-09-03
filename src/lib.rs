@@ -16,9 +16,10 @@ use crossbeam_channel::tick;
 use futures::stream::Stream;
 use futures::task::Context;
 use futures::task::Poll;
+use libcommon_rs::peer::PeerId;
 use libconsensus::errors::Error::AtMaxVecCapacity;
 use libconsensus::errors::Result as BaseResult;
-use libconsensus::{Consensus, PeerId};
+use libconsensus::Consensus;
 use libtransport::Transport;
 use libtransport_tcp::TCPtransport;
 use serde::de::DeserializeOwned;
@@ -31,23 +32,27 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 // DAG node structure
-pub struct DAG<'a, T> {
-    conf: Arc<Mutex<DAGconfig<T>>>,
+pub struct DAG<'a, P, T>
+where
+    P: PeerId,
+{
+    conf: Arc<Mutex<DAGconfig<P, T>>>,
     listener_handle: Option<JoinHandle<()>>,
     procA_handle: Option<JoinHandle<()>>,
     procB_handle: Option<JoinHandle<()>>,
     tx_pool: Vec<T>,
-    internal_tx_pool: Vec<InternalTransaction>,
+    internal_tx_pool: Vec<InternalTransaction<P>>,
     quit_tx: Sender<()>,
     lamport_time: LamportTime,
     current_frame: Frame,
     last_finalised_frame: Option<Frame>,
-    sync_request_transport: &'a (dyn Transport<PeerId, SyncReq, Error, DAGPeerList> + 'a),
+    sync_request_transport: &'a (dyn Transport<P, SyncReq<P>, Error, DAGPeerList<P>> + 'a),
 }
 
-fn listener<Data: 'static>(cfg_mutexed: Arc<Mutex<DAGconfig<Data>>>)
+fn listener<P, Data: 'static>(cfg_mutexed: Arc<Mutex<DAGconfig<P, Data>>>)
 where
     Data: Serialize + DeserializeOwned + Send + Clone,
+    P: PeerId,
 {
     // FIXME: what we do with unwrap() in threads?
     let config = Arc::clone(&cfg_mutexed);
@@ -69,12 +74,21 @@ where
     }
 }
 
-fn procedureA<D>(config: Arc<Mutex<DAGconfig<D>>>) {}
-
-fn procedureB<D>(config: Arc<Mutex<DAGconfig<D>>>) {}
-
-impl<D> Consensus<D> for DAG<'_, D>
+fn procedureA<P, D>(config: Arc<Mutex<DAGconfig<P, D>>>)
 where
+    P: PeerId,
+{
+}
+
+fn procedureB<P, D>(config: Arc<Mutex<DAGconfig<P, D>>>)
+where
+    P: PeerId,
+{
+}
+
+impl<P, D> Consensus<'_, D> for DAG<'_, P, D>
+where
+    P: PeerId,
     D: Serialize + DeserializeOwned + Send + Clone + 'static,
     //libtransport_tcp::TCPtransport<sync::SyncReq>: libtransport::Transport<
     //    std::vec::Vec<u8>,
@@ -84,10 +98,10 @@ where
     //    dyn TransportConfiguration<SyncReq>,
     //>,
 {
-    type Configuration = DAGconfig<D>;
+    type Configuration = DAGconfig<P, D>;
     //    type Data = D;
 
-    fn new(mut cfg: DAGconfig<D>) -> BaseResult<DAG<'static, D>> {
+    fn new(mut cfg: DAGconfig<P, D>) -> BaseResult<DAG<'static, P, D>> {
         let (tx, rx) = mpsc::channel();
         cfg.set_quit_rx(rx);
         let cfg_mutexed = Arc::new(Mutex::new(cfg));
@@ -102,7 +116,7 @@ where
                 TCP => {
                     //                    let mut tcp_cfg =
                     //                        TCPtransportCfg::<SyncReq>::new(cfg.request_addr.clone()).unwrap();
-                    TCPtransport::<SyncReq>::new(cfg.request_addr.clone())?
+                    TCPtransport::<SyncReq<P>>::new(cfg.request_addr.clone())?
                 }
                 Unknown => panic!("unknown transport"),
             }
@@ -138,13 +152,19 @@ where
     }
 }
 
-impl<D> Drop for DAG<'_, D> {
+impl<P, D> Drop for DAG<'_, P, D>
+where
+    P: PeerId,
+{
     fn drop(&mut self) {
         self.quit_tx.send(()).unwrap();
     }
 }
 
-impl<D> DAG<'_, D> {
+impl<P, D> DAG<'_, P, D>
+where
+    P: PeerId,
+{
     // Basically run() method spawn Procedure B of DAG0 and execute loop of
     // procedure A of DAG0 until terminated with shutdown()
     fn run(&mut self) {
@@ -172,7 +192,7 @@ impl<D> DAG<'_, D> {
     }
 
     // send internal transaction
-    fn send_internal_transaction(&mut self, tx: InternalTransaction) -> Result<()> {
+    fn send_internal_transaction(&mut self, tx: InternalTransaction<P>) -> Result<()> {
         if self.internal_tx_pool.len() == std::usize::MAX {
             return Err(Error::Base(AtMaxVecCapacity));
         }
@@ -181,10 +201,11 @@ impl<D> DAG<'_, D> {
     }
 }
 
-impl<D> Unpin for DAG<'_, D> {}
+impl<P, D> Unpin for DAG<'_, P, D> where P: PeerId {}
 
-impl<Data> Stream for DAG<'_, Data>
+impl<P, Data> Stream for DAG<'_, P, Data>
 where
+    P: PeerId,
     Data: Serialize + DeserializeOwned,
 {
     type Item = Data;
