@@ -46,7 +46,7 @@ where
     lamport_time: LamportTime,
     current_frame: Frame,
     last_finalised_frame: Option<Frame>,
-    sync_request_transport: &'a (dyn Transport<P, SyncReq<P>, Error, DAGPeerList<P>> + 'a),
+    sync_request_transport: Box<dyn Transport<P, SyncReq<P>, Error, DAGPeerList<P>> + 'a>,
 }
 
 fn listener<P, Data: 'static>(cfg_mutexed: Arc<Mutex<DAGconfig<P, Data>>>)
@@ -88,10 +88,10 @@ where
 
 impl<P, D> Consensus<'_, D> for DAG<'_, P, D>
 where
-    P: PeerId,
+    P: PeerId + 'static,
     D: Serialize + DeserializeOwned + Send + Clone + 'static,
-    libtransport_tcp::TCPtransport<sync::SyncReq<P>>:
-        libtransport::Transport<P, sync::SyncReq<P>, errors::Error, peer::DAGPeerList<P>>,
+    //libtransport_tcp::TCPtransport<sync::SyncReq<P>>:
+    //    libtransport::Transport<P, sync::SyncReq<P>, errors::Error, peer::DAGPeerList<P>>,
     //libtransport_tcp::TCPtransport<sync::SyncReq>: libtransport::Transport<
     //    std::vec::Vec<u8>,
     //    sync::SyncReq,
@@ -130,7 +130,15 @@ where
             current_frame: 0,
             last_finalised_frame: None,
             listener_handle: Some(handle),
-            sync_request_transport: &sr_transport,
+            sync_request_transport: Box::new(
+                sr_transport
+                    as dyn libtransport::Transport<
+                        P,
+                        sync::SyncReq<P>,
+                        errors::Error,
+                        peer::DAGPeerList<P>,
+                    >,
+            ),
             procA_handle: Some(procA_handle),
             procB_handle: Some(procB_handle),
         });
