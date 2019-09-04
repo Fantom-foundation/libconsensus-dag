@@ -90,6 +90,8 @@ impl<P, D> Consensus<'_, D> for DAG<'_, P, D>
 where
     P: PeerId,
     D: Serialize + DeserializeOwned + Send + Clone + 'static,
+    libtransport_tcp::TCPtransport<sync::SyncReq<P>>:
+        libtransport::Transport<P, sync::SyncReq<P>, errors::Error, peer::DAGPeerList<P>>,
     //libtransport_tcp::TCPtransport<sync::SyncReq>: libtransport::Transport<
     //    std::vec::Vec<u8>,
     //    sync::SyncReq,
@@ -104,6 +106,8 @@ where
     fn new(mut cfg: DAGconfig<P, D>) -> BaseResult<DAG<'static, P, D>> {
         let (tx, rx) = mpsc::channel();
         cfg.set_quit_rx(rx);
+        let bind_addr = cfg.request_addr.clone();
+        let transport_type = cfg.transport_type.clone();
         let cfg_mutexed = Arc::new(Mutex::new(cfg));
         let config = Arc::clone(&cfg_mutexed);
         let handle = thread::spawn(|| listener(config));
@@ -112,13 +116,9 @@ where
         let configB = Arc::clone(&cfg_mutexed);
         let procB_handle = thread::spawn(|| procedureB(configB));
         let mut sr_transport = {
-            match cfg.transport_type {
-                TCP => {
-                    //                    let mut tcp_cfg =
-                    //                        TCPtransportCfg::<SyncReq>::new(cfg.request_addr.clone()).unwrap();
-                    TCPtransport::<SyncReq<P>>::new(cfg.request_addr.clone())?
-                }
-                Unknown => panic!("unknown transport"),
+            match transport_type {
+                libtransport::TransportType::TCP => TCPtransport::<SyncReq<P>>::new(bind_addr)?,
+                libtransport::TransportType::Unknown => panic!("unknown transport"),
             }
         };
         return Ok(DAG {
