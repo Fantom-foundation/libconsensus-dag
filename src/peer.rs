@@ -14,15 +14,12 @@ use std::ops::{Index, IndexMut};
 pub(crate) type Frame = usize;
 pub(crate) type Height = usize;
 
-pub(crate) type GossipList<PeerId> = HashMap<PeerId, LamportTime>;
-pub(crate) type SuspectList<PeerId> = HashMap<PeerId, LamportTime>;
+pub(crate) type GossipList<P> = HashMap<P, LamportTime>;
+pub(crate) type SuspectList<P> = HashMap<P, LamportTime>;
 
 // Peer attributes
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DAGPeer<P>
-where
-    P: PeerId,
-{
+pub struct DAGPeer<P> {
     #[serde(rename = "PubKeyHex")]
     id: P,
     #[serde(rename = "NetAddr")]

@@ -4,15 +4,11 @@ use crate::lamport_time::LamportTime;
 use crate::peer::Frame;
 use crate::transactions::InternalTransaction;
 use libcommon_rs::peer::PeerId;
+use libcommon_rs::Stub;
 use serde::{Deserialize, Serialize};
 
-trait Stub {}
-
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub(crate) struct Event<P>
-where
-    P: PeerId,
-{
+pub(crate) struct Event<P> {
     pub(crate) creator: P,
     height: u64,
     self_parent: EventHash,

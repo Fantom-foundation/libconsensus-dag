@@ -1,16 +1,17 @@
 use crate::lamport_time::LamportTime;
 use crate::peer::GossipList;
+use core::hash::Hash;
 use libcommon_rs::peer::PeerId;
+use libcommon_rs::Stub;
 use serde::{Deserialize, Serialize};
 
 // Sync request
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SyncReq<P>
-where
-    P: PeerId,
-{
+pub struct SyncReq<P: Hash + Eq> {
     from: P,
     to: P,
     gossip_list: GossipList<P>,
     lamport_time: LamportTime,
 }
+
+impl<P> Stub for SyncReq<P> where P: PeerId {}
