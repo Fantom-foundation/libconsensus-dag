@@ -117,7 +117,14 @@ where
         let procB_handle = thread::spawn(|| procedureB(configB));
         let mut sr_transport = {
             match transport_type {
-                libtransport::TransportType::TCP => TCPtransport::<SyncReq<P>>::new(bind_addr)?,
+                libtransport::TransportType::TCP => {
+                    <TCPtransport<SyncReq<P>> as libtransport::Transport<
+                        P,
+                        sync::SyncReq<P>,
+                        errors::Error,
+                        peer::DAGPeerList<P>,
+                    >>::new(bind_addr)?
+                }
                 libtransport::TransportType::Unknown => panic!("unknown transport"),
             }
         };
@@ -130,15 +137,15 @@ where
             current_frame: 0,
             last_finalised_frame: None,
             listener_handle: Some(handle),
-            sync_request_transport: Box::new(
-                sr_transport
-                    as dyn libtransport::Transport<
+            sync_request_transport: Box::new(sr_transport)
+                as Box<
+                    dyn libtransport::Transport<
                         P,
                         sync::SyncReq<P>,
                         errors::Error,
                         peer::DAGPeerList<P>,
                     >,
-            ),
+                >,
             procA_handle: Some(procA_handle),
             procB_handle: Some(procB_handle),
         });
