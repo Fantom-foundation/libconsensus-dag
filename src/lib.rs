@@ -10,7 +10,7 @@ use crate::errors::{Error, Result};
 use crate::lamport_time::LamportTime;
 use crate::peer::DAGPeerList;
 use crate::peer::Frame;
-use crate::sync::SyncReq;
+use crate::sync::{SyncReply, SyncReq};
 use crate::transactions::InternalTransaction;
 use crossbeam_channel::tick;
 use futures::stream::Stream;
@@ -47,6 +47,7 @@ where
     current_frame: Frame,
     last_finalised_frame: Option<Frame>,
     sync_request_transport: Box<dyn Transport<P, SyncReq<P>, Error, DAGPeerList<P>> + 'a>,
+    sync_reply_transport: Box<dyn Transport<P, SyncReply<P>, Error, DAGPeerList<P>> + 'a>,
 }
 
 fn listener<P, Data: 'static>(cfg_mutexed: Arc<Mutex<DAGconfig<P, Data>>>)
@@ -74,12 +75,35 @@ where
     }
 }
 
+// Procedure A of DAG consensus
 fn procedureA<P, D>(config: Arc<Mutex<DAGconfig<P, D>>>)
 where
     P: PeerId,
 {
+    let ticker = {
+        let cfg = config.lock().unwrap();
+        tick(Duration::from_millis(cfg.heartbeat))
+    };
+    // DAG procedure A loop
+    loop {
+        // check if shutdown() has been called
+        let mut cfg = config.lock().unwrap();
+        if cfg.check_quit() {
+            // terminating
+            // FIXME: need to be implemented
+            break;
+        }
+        let peer = cfg.peers.next_peer();
+        let gossip_list = cfg.peers.get_gossip_list();
+
+        // wait until hearbeat interval expires
+        select! {
+            recv(ticker) -> _ => {},
+        }
+    }
 }
 
+// Procedure B of DAG consensus
 fn procedureB<P, D>(config: Arc<Mutex<DAGconfig<P, D>>>)
 where
     P: PeerId,
@@ -90,23 +114,14 @@ impl<P, D> Consensus<'_, D> for DAG<'_, P, D>
 where
     P: PeerId + 'static,
     D: Serialize + DeserializeOwned + Send + Clone + 'static,
-    //libtransport_tcp::TCPtransport<sync::SyncReq<P>>:
-    //    libtransport::Transport<P, sync::SyncReq<P>, errors::Error, peer::DAGPeerList<P>>,
-    //libtransport_tcp::TCPtransport<sync::SyncReq>: libtransport::Transport<
-    //    std::vec::Vec<u8>,
-    //    sync::SyncReq,
-    //    errors::Error,
-    //    peer::DAGPeerList,
-    //    dyn TransportConfiguration<SyncReq>,
-    //>,
 {
     type Configuration = DAGconfig<P, D>;
-    //    type Data = D;
 
     fn new(mut cfg: DAGconfig<P, D>) -> BaseResult<DAG<'static, P, D>> {
         let (tx, rx) = mpsc::channel();
         cfg.set_quit_rx(rx);
         let bind_addr = cfg.request_addr.clone();
+        let reply_addr = cfg.reply_addr.clone();
         let transport_type = cfg.transport_type.clone();
         let cfg_mutexed = Arc::new(Mutex::new(cfg));
         let config = Arc::clone(&cfg_mutexed);
@@ -128,6 +143,19 @@ where
                 libtransport::TransportType::Unknown => panic!("unknown transport"),
             }
         };
+        let mut sp_transport = {
+            match transport_type {
+                libtransport::TransportType::TCP => {
+                    <TCPtransport<SyncReply<P>> as libtransport::Transport<
+                        P,
+                        sync::SyncReply<P>,
+                        errors::Error,
+                        peer::DAGPeerList<P>,
+                    >>::new(reply_addr)?
+                }
+                libtransport::TransportType::Unknown => panic!("unknown transport"),
+            }
+        };
         return Ok(DAG {
             conf: cfg_mutexed,
             tx_pool: Vec::with_capacity(1),
@@ -142,6 +170,15 @@ where
                     dyn libtransport::Transport<
                         P,
                         sync::SyncReq<P>,
+                        errors::Error,
+                        peer::DAGPeerList<P>,
+                    >,
+                >,
+            sync_reply_transport: Box::new(sp_transport)
+                as Box<
+                    dyn libtransport::Transport<
+                        P,
+                        sync::SyncReply<P>,
                         errors::Error,
                         peer::DAGPeerList<P>,
                     >,
@@ -180,32 +217,6 @@ impl<P, D> DAG<'_, P, D>
 where
     P: PeerId,
 {
-    // Basically run() method spawn Procedure B of DAG0 and execute loop of
-    // procedure A of DAG0 until terminated with shutdown()
-    fn run(&mut self) {
-        // FIXME: need to be implemented!
-        let config = Arc::clone(&self.conf);
-        let ticker = {
-            let mut cfg = config.lock().unwrap();
-            tick(Duration::from_millis(cfg.heartbeat))
-        };
-        // DAG0 procedure A loop
-        loop {
-            // check if shutdown() has been called
-            let mut cfg = config.lock().unwrap();
-            if cfg.check_quit() {
-                // terminating
-                // FIXME: need to be implemented
-                break;
-            }
-
-            // wait until hearbeat interval expires
-            select! {
-                recv(ticker) -> _ => {},
-            }
-        }
-    }
-
     // send internal transaction
     fn send_internal_transaction(&mut self, tx: InternalTransaction<P>) -> Result<()> {
         if self.internal_tx_pool.len() == std::usize::MAX {

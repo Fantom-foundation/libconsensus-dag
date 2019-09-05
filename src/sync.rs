@@ -1,3 +1,4 @@
+use crate::event::Event;
 use crate::lamport_time::LamportTime;
 use crate::peer::GossipList;
 use core::hash::Hash;
@@ -15,3 +16,13 @@ pub struct SyncReq<P: Hash + Eq> {
 }
 
 impl<P> Stub for SyncReq<P> where P: PeerId {}
+
+// Sync Reply
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SyncReply<P: Hash + Eq> {
+    from: P,
+    to: P,
+    gossip_list: GossipList<P>,
+    lamport_time: LamportTime,
+    events: Vec<Event<P>>,
+}

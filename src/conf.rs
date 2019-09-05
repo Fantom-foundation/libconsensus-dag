@@ -20,7 +20,7 @@ where
     pub(crate) heartbeat: u64,
     pub(crate) quit_rx: Option<Receiver<()>>,
     pub(crate) waker: Option<Waker>,
-    peers: DAGPeerList<P>,
+    pub(crate) peers: DAGPeerList<P>,
     phantom: PhantomData<Data>,
 }
 

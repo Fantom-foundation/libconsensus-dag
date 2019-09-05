@@ -26,6 +26,8 @@ pub struct DAGPeer<P> {
     net_addr: String,
     #[serde(skip, default)]
     height: Height,
+    #[serde(skip, default)]
+    lamport_time: LamportTime,
 }
 
 impl<P> From<BaseConsensusPeer<P>> for DAGPeer<P>
@@ -37,6 +39,7 @@ where
             id: bp.id,
             net_addr: bp.net_addr,
             height: 0,
+            lamport_time: 0,
         }
     }
 }
@@ -50,6 +53,7 @@ where
             id,
             net_addr,
             height: 0,
+            lamport_time: 0,
         }
     }
     fn get_id(&self) -> P {
@@ -156,5 +160,13 @@ where
             self.r = self.n >> 1
         }
         return self.peers[next].clone();
+    }
+
+    pub fn get_gossip_list(&self) -> GossipList<P> {
+        let mut g = GossipList::<P>::new();
+        for (_i, p) in self.peers.iter().enumerate() {
+            g.insert(p.id.clone(), p.lamport_time.clone());
+        }
+        g
     }
 }
