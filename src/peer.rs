@@ -21,9 +21,9 @@ pub(crate) type SuspectList<P> = HashMap<P, LamportTime>;
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DAGPeer<P> {
     #[serde(rename = "PubKeyHex")]
-    id: P,
+    pub(crate) id: P,
     #[serde(rename = "NetAddr")]
-    net_addr: String,
+    pub(crate) net_addr: String,
     #[serde(skip, default)]
     height: Height,
     #[serde(skip, default)]

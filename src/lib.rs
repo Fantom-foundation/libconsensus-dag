@@ -21,28 +21,46 @@ use libconsensus::errors::Error::AtMaxVecCapacity;
 use libconsensus::errors::Result as BaseResult;
 use libconsensus::Consensus;
 use libtransport::Transport;
+use libtransport::TransportSender;
+use libtransport_tcp::sender::TCPsender;
 use libtransport_tcp::TCPtransport;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::pin::Pin;
 use std::sync::mpsc::{self, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
 // DAG node structure
-pub struct DAG<'a, P, T>
+pub struct DAG<P, T>
 where
     P: PeerId,
 {
-    conf: Arc<Mutex<DAGconfig<P, T>>>,
+    //    conf: Arc<Mutex<DAGconfig<P, T>>>,
+    core: Arc<RwLock<DAGcore<'static, P, T>>>,
     listener_handle: Option<JoinHandle<()>>,
     procA_handle: Option<JoinHandle<()>>,
     procB_handle: Option<JoinHandle<()>>,
-    tx_pool: Vec<T>,
-    internal_tx_pool: Vec<InternalTransaction<P>>,
+
+    //    tx_pool: Vec<T>,
+    //    internal_tx_pool: Vec<InternalTransaction<P>>,
     quit_tx: Sender<()>,
+    //    lamport_time: LamportTime,
+    //    current_frame: Frame,
+    //    last_finalised_frame: Option<Frame>,
+    //    sync_request_transport: Box<dyn Transport<P, SyncReq<P>, Error, DAGPeerList<P>> + 'a>,
+    //    sync_reply_transport: Box<dyn Transport<P, SyncReply<P>, Error, DAGPeerList<P>> + 'a>,
+}
+
+pub(crate) struct DAGcore<'a, P, Data>
+where
+    P: PeerId,
+{
+    conf: Arc<RwLock<DAGconfig<P, Data>>>,
+    tx_pool: Vec<Data>,
+    internal_tx_pool: Vec<InternalTransaction<P>>,
     lamport_time: LamportTime,
     current_frame: Frame,
     last_finalised_frame: Option<Frame>,
@@ -50,16 +68,16 @@ where
     sync_reply_transport: Box<dyn Transport<P, SyncReply<P>, Error, DAGPeerList<P>> + 'a>,
 }
 
-fn listener<P, Data: 'static>(cfg_mutexed: Arc<Mutex<DAGconfig<P, Data>>>)
+fn listener<P, Data: 'static>(core: Arc<RwLock<DAGcore<'_, P, Data>>>)
 where
     Data: Serialize + DeserializeOwned + Send + Clone,
     P: PeerId,
 {
+    let config = { core.read().unwrap().conf.clone() };
     // FIXME: what we do with unwrap() in threads?
-    let config = Arc::clone(&cfg_mutexed);
     loop {
         // check if quit channel got message
-        let mut cfg = config.lock().unwrap();
+        let mut cfg = config.write().unwrap();
         match &cfg.quit_rx {
             None => {}
             Some(ch) => {
@@ -76,13 +94,32 @@ where
 }
 
 // Procedure A of DAG consensus
-fn procedureA<P, D>(config: Arc<Mutex<DAGconfig<P, D>>>)
+fn procedureA<P: 'static, D>(config: Arc<Mutex<DAGconfig<P, D>>>)
 where
     P: PeerId,
 {
     let ticker = {
         let cfg = config.lock().unwrap();
         tick(Duration::from_millis(cfg.heartbeat))
+    };
+    // setup TransportSender for Sync Request.
+    let transport_type = {
+        let cfg = config.lock().unwrap();
+        cfg.transport_type.clone()
+    };
+    let sync_req_sender = {
+        match transport_type {
+            libtransport::TransportType::TCP => {
+                <TCPsender<SyncReq<P>> as libtransport::TransportSender<
+                    P,
+                    sync::SyncReq<P>,
+                    errors::Error,
+                    peer::DAGPeerList<P>,
+                >>::new()
+                .unwrap()
+            }
+            libtransport::TransportType::Unknown => panic!("unknown transport"),
+        }
     };
     // DAG procedure A loop
     loop {
@@ -95,6 +132,12 @@ where
         }
         let peer = cfg.peers.next_peer();
         let gossip_list = cfg.peers.get_gossip_list();
+        let request = SyncReq {
+            from: cfg.peers[0].id.clone(), // we assume creator is the peer of index 0
+            to: peer.id,
+            gossip_list,
+            events,
+        };
 
         // wait until hearbeat interval expires
         select! {
@@ -110,26 +153,19 @@ where
 {
 }
 
-impl<P, D> Consensus<'_, D> for DAG<'_, P, D>
+impl<P, D> Consensus<'_, D> for DAG<P, D>
 where
     P: PeerId + 'static,
     D: Serialize + DeserializeOwned + Send + Clone + 'static,
 {
     type Configuration = DAGconfig<P, D>;
 
-    fn new(mut cfg: DAGconfig<P, D>) -> BaseResult<DAG<'static, P, D>> {
+    fn new(mut cfg: DAGconfig<P, D>) -> BaseResult<DAG<P, D>> {
         let (tx, rx) = mpsc::channel();
         cfg.set_quit_rx(rx);
         let bind_addr = cfg.request_addr.clone();
         let reply_addr = cfg.reply_addr.clone();
         let transport_type = cfg.transport_type.clone();
-        let cfg_mutexed = Arc::new(Mutex::new(cfg));
-        let config = Arc::clone(&cfg_mutexed);
-        let handle = thread::spawn(|| listener(config));
-        let configA = Arc::clone(&cfg_mutexed);
-        let procA_handle = thread::spawn(|| procedureA(configA));
-        let configB = Arc::clone(&cfg_mutexed);
-        let procB_handle = thread::spawn(|| procedureB(configB));
         let mut sr_transport = {
             match transport_type {
                 libtransport::TransportType::TCP => {
@@ -156,15 +192,14 @@ where
                 libtransport::TransportType::Unknown => panic!("unknown transport"),
             }
         };
-        return Ok(DAG {
-            conf: cfg_mutexed,
+
+        let core = Arc::new(RwLock::new(DAGcore {
+            conf: Arc::new(RwLock::new(cfg)),
             tx_pool: Vec::with_capacity(1),
             internal_tx_pool: Vec::with_capacity(1),
-            quit_tx: tx,
             lamport_time: 0,
             current_frame: 0,
             last_finalised_frame: None,
-            listener_handle: Some(handle),
             sync_request_transport: Box::new(sr_transport)
                 as Box<
                     dyn libtransport::Transport<
@@ -183,6 +218,19 @@ where
                         peer::DAGPeerList<P>,
                     >,
                 >,
+        }));
+
+        let cfg_mutexed = Arc::new(Mutex::new(cfg));
+        let config = Arc::clone(&cfg_mutexed);
+        let handle = thread::spawn(|| listener(core.clone()));
+        let configA = Arc::clone(&cfg_mutexed);
+        let procA_handle = thread::spawn(|| procedureA(configA));
+        let configB = Arc::clone(&cfg_mutexed);
+        let procB_handle = thread::spawn(|| procedureB(configB));
+        return Ok(DAG {
+            core: core,
+            quit_tx: tx,
+            listener_handle: Some(handle),
             procA_handle: Some(procA_handle),
             procB_handle: Some(procB_handle),
         });
@@ -204,7 +252,7 @@ where
     }
 }
 
-impl<P, D> Drop for DAG<'_, P, D>
+impl<P, D> Drop for DAG<P, D>
 where
     P: PeerId,
 {
@@ -213,7 +261,7 @@ where
     }
 }
 
-impl<P, D> DAG<'_, P, D>
+impl<P, D> DAG<P, D>
 where
     P: PeerId,
 {
@@ -227,9 +275,9 @@ where
     }
 }
 
-impl<P, D> Unpin for DAG<'_, P, D> where P: PeerId {}
+impl<P, D> Unpin for DAG<P, D> where P: PeerId {}
 
-impl<P, Data> Stream for DAG<'_, P, Data>
+impl<P, Data> Stream for DAG<P, Data>
 where
     P: PeerId,
     Data: Serialize + DeserializeOwned,
