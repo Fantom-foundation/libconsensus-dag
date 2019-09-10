@@ -1,6 +1,7 @@
 // Config module
 
 use crate::peer::DAGPeerList;
+use crate::store::StoreType;
 use futures::task::Waker;
 use libcommon_rs::peer::{PeerId, PeerList};
 use libconsensus::ConsensusConfiguration;
@@ -16,6 +17,7 @@ where
     pub(crate) reply_addr: String,
     shutdown: bool,
     pub(crate) transport_type: TransportType,
+    pub(crate) store_type: StoreType,
     // heartbeat duration in milliseconds
     pub(crate) heartbeat: u64,
     pub(crate) quit_rx: Option<Receiver<()>>,
@@ -56,6 +58,7 @@ where
             heartbeat: 1000,
             shutdown: false,
             transport_type: TransportType::Unknown,
+            store_type: StoreType::Unknown,
             quit_rx: None,
             waker: None,
             peers: DAGPeerList::new(),

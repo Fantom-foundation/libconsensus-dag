@@ -6,6 +6,12 @@ use crate::event_hash::EventHash;
 use crate::flag_table::FlagTable;
 use libcommon_rs::peer::PeerId;
 
+#[derive(Clone)]
+pub(crate) enum StoreType {
+    Unknown,
+    Sled,
+}
+
 pub(crate) trait DAGstore<P>
 where
     P: PeerId,

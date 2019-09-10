@@ -10,6 +10,8 @@ use crate::errors::{Error, Result};
 use crate::lamport_time::LamportTime;
 use crate::peer::DAGPeerList;
 use crate::peer::Frame;
+use crate::store::DAGstore;
+use crate::store_sled::SledStore;
 use crate::sync::{SyncReply, SyncReq};
 use crate::transactions::InternalTransaction;
 use crossbeam_channel::tick;
@@ -28,7 +30,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::pin::Pin;
 use std::sync::mpsc::{self, Sender};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, RwLock};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -39,7 +41,7 @@ where
     P: PeerId,
 {
     //    conf: Arc<Mutex<DAGconfig<P, T>>>,
-    core: Arc<RwLock<DAGcore<'static, P, T>>>,
+    core: Arc<RwLock<DAGcore<P, T>>>,
     listener_handle: Option<JoinHandle<()>>,
     procA_handle: Option<JoinHandle<()>>,
     procB_handle: Option<JoinHandle<()>>,
@@ -54,7 +56,7 @@ where
     //    sync_reply_transport: Box<dyn Transport<P, SyncReply<P>, Error, DAGPeerList<P>> + 'a>,
 }
 
-pub(crate) struct DAGcore<'a, P, Data>
+pub(crate) struct DAGcore<P, Data>
 where
     P: PeerId,
 {
@@ -64,11 +66,11 @@ where
     lamport_time: LamportTime,
     current_frame: Frame,
     last_finalised_frame: Option<Frame>,
-    sync_request_transport: Box<dyn Transport<P, SyncReq<P>, Error, DAGPeerList<P>> + 'a>,
-    sync_reply_transport: Box<dyn Transport<P, SyncReply<P>, Error, DAGPeerList<P>> + 'a>,
+    //    sync_request_transport: Box<dyn Transport<P, SyncReq<P>, Error, DAGPeerList<P>> + 'a>,
+    //    sync_reply_transport: Box<dyn Transport<P, SyncReply<P>, Error, DAGPeerList<P>> + 'a>,
 }
 
-fn listener<P, Data: 'static>(core: Arc<RwLock<DAGcore<'_, P, Data>>>)
+fn listener<P, Data: 'static>(core: Arc<RwLock<DAGcore<P, Data>>>)
 where
     Data: Serialize + DeserializeOwned + Send + Clone,
     P: PeerId,
@@ -94,19 +96,20 @@ where
 }
 
 // Procedure A of DAG consensus
-fn procedureA<P: 'static, D>(config: Arc<Mutex<DAGconfig<P, D>>>)
+fn procedureA<P: 'static, D>(core: Arc<RwLock<DAGcore<P, D>>>)
 where
     P: PeerId,
 {
+    let config = { core.read().unwrap().conf.clone() };
     let ticker = {
-        let cfg = config.lock().unwrap();
+        let cfg = config.read().unwrap();
         tick(Duration::from_millis(cfg.heartbeat))
     };
-    // setup TransportSender for Sync Request.
-    let transport_type = {
-        let cfg = config.lock().unwrap();
-        cfg.transport_type.clone()
+    let (transport_type, store_type) = {
+        let cfg = config.read().unwrap();
+        (cfg.transport_type.clone(), cfg.store_type.clone())
     };
+    // setup TransportSender for Sync Request.
     let sync_req_sender = {
         match transport_type {
             libtransport::TransportType::TCP => {
@@ -121,10 +124,20 @@ where
             libtransport::TransportType::Unknown => panic!("unknown transport"),
         }
     };
+    // setup Store for procedure A
+    let store = {
+        match store_type {
+            crate::store::StoreType::Unknown => panic!("unknown DAG store"),
+            crate::store::StoreType::Sled => {
+                // FIXME: we should use a configurable parameter for store location instead of "./sled_store"
+                <SledStore as DAGstore<P>>::new("./sled_store").unwrap()
+            }
+        }
+    };
     // DAG procedure A loop
     loop {
         // check if shutdown() has been called
-        let mut cfg = config.lock().unwrap();
+        let mut cfg = config.write().unwrap();
         if cfg.check_quit() {
             // terminating
             // FIXME: need to be implemented
@@ -136,7 +149,7 @@ where
             from: cfg.peers[0].id.clone(), // we assume creator is the peer of index 0
             to: peer.id,
             gossip_list,
-            events,
+            lamport_time: { core.read().unwrap().lamport_time.clone() },
         };
 
         // wait until hearbeat interval expires
@@ -147,10 +160,11 @@ where
 }
 
 // Procedure B of DAG consensus
-fn procedureB<P, D>(config: Arc<Mutex<DAGconfig<P, D>>>)
+fn procedureB<P, D>(core: Arc<RwLock<DAGcore<P, D>>>)
 where
     P: PeerId,
 {
+    let config = { core.read().unwrap().conf.clone() };
 }
 
 impl<P, D> Consensus<'_, D> for DAG<P, D>
@@ -200,33 +214,33 @@ where
             lamport_time: 0,
             current_frame: 0,
             last_finalised_frame: None,
-            sync_request_transport: Box::new(sr_transport)
-                as Box<
-                    dyn libtransport::Transport<
-                        P,
-                        sync::SyncReq<P>,
-                        errors::Error,
-                        peer::DAGPeerList<P>,
-                    >,
-                >,
-            sync_reply_transport: Box::new(sp_transport)
-                as Box<
-                    dyn libtransport::Transport<
-                        P,
-                        sync::SyncReply<P>,
-                        errors::Error,
-                        peer::DAGPeerList<P>,
-                    >,
-                >,
+            //            sync_request_transport: Box::new(sr_transport)
+            //                as Box<
+            //                    dyn libtransport::Transport<
+            //                        P,
+            //                        sync::SyncReq<P>,
+            //                        errors::Error,
+            //                        peer::DAGPeerList<P>,
+            //                    >,
+            //                >,
+            //            sync_reply_transport: Box::new(sp_transport)
+            //                as Box<
+            //                    dyn libtransport::Transport<
+            //                        P,
+            //                        sync::SyncReply<P>,
+            //                        errors::Error,
+            //                        peer::DAGPeerList<P>,
+            //                    >,
+            //                >,
         }));
 
-        let cfg_mutexed = Arc::new(Mutex::new(cfg));
-        let config = Arc::clone(&cfg_mutexed);
+        //        let cfg_mutexed = Arc::new(Mutex::new(cfg));
+        //        let config = Arc::clone(&cfg_mutexed);
         let handle = thread::spawn(|| listener(core.clone()));
-        let configA = Arc::clone(&cfg_mutexed);
-        let procA_handle = thread::spawn(|| procedureA(configA));
-        let configB = Arc::clone(&cfg_mutexed);
-        let procB_handle = thread::spawn(|| procedureB(configB));
+        //        let configA = Arc::clone(&cfg_mutexed);
+        let procA_handle = thread::spawn(|| procedureA(core.clone()));
+        //        let configB = Arc::clone(&cfg_mutexed);
+        let procB_handle = thread::spawn(|| procedureB(core.clone()));
         return Ok(DAG {
             core: core,
             quit_tx: tx,
@@ -243,11 +257,12 @@ where
     }
 
     fn send_transaction(&mut self, data: D) -> BaseResult<()> {
+        let core = self.core.write().unwrap();
         // Vec::push() panics when number of elements overflows `usize`
-        if self.tx_pool.len() == std::usize::MAX {
+        if core.tx_pool.len() == std::usize::MAX {
             return Err(AtMaxVecCapacity);
         }
-        self.tx_pool.push(data);
+        core.tx_pool.push(data);
         Ok(())
     }
 }
@@ -267,10 +282,12 @@ where
 {
     // send internal transaction
     fn send_internal_transaction(&mut self, tx: InternalTransaction<P>) -> Result<()> {
-        if self.internal_tx_pool.len() == std::usize::MAX {
+        let core = self.core.write().unwrap();
+        // Vec::push() panics when number of elements overflows `usize`
+        if core.internal_tx_pool.len() == std::usize::MAX {
             return Err(Error::Base(AtMaxVecCapacity));
         }
-        self.internal_tx_pool.push(tx);
+        core.internal_tx_pool.push(tx);
         Ok(())
     }
 }
@@ -285,8 +302,11 @@ where
     type Item = Data;
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let myself = Pin::get_mut(self);
-        let config = Arc::clone(&myself.conf);
-        let mut cfg = config.lock().unwrap();
+        let config = {
+            let core = self.core.write().unwrap();
+            Arc::clone(&core.conf)
+        };
+        let mut cfg = config.write().unwrap();
         // FIXME: need to be implemented
         cfg.waker = Some(cx.waker().clone());
         Poll::Pending
