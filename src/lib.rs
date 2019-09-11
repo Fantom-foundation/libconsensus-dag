@@ -15,7 +15,9 @@ use crate::store_sled::SledStore;
 use crate::sync::{SyncReply, SyncReq};
 use crate::transactions::InternalTransaction;
 use crossbeam_channel::tick;
+use futures::future;
 use futures::stream::Stream;
+use futures::stream::{self, StreamExt, TryStreamExt};
 use futures::task::Context;
 use futures::task::Poll;
 use libcommon_rs::peer::PeerId;
@@ -23,13 +25,16 @@ use libconsensus::errors::Error::AtMaxVecCapacity;
 use libconsensus::errors::Result as BaseResult;
 use libconsensus::Consensus;
 use libtransport::Transport;
+use libtransport::TransportReceiver;
 use libtransport::TransportSender;
+use libtransport_tcp::receiver::TCPreceiver;
 use libtransport_tcp::sender::TCPsender;
 use libtransport_tcp::TCPtransport;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::pin::Pin;
 use std::sync::mpsc::{self, Sender};
+use std::sync::mpsc::{Receiver, TryRecvError};
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::thread::JoinHandle;
@@ -70,7 +75,7 @@ where
     //    sync_reply_transport: Box<dyn Transport<P, SyncReply<P>, Error, DAGPeerList<P>> + 'a>,
 }
 
-fn listener<P, Data: 'static>(core: Arc<RwLock<DAGcore<P, Data>>>)
+fn listener<P, Data: 'static>(core: Arc<RwLock<DAGcore<P, Data>>>, quit_rx: Receiver<()>)
 where
     Data: Serialize + DeserializeOwned + Send + Clone,
     P: PeerId,
@@ -80,13 +85,12 @@ where
     loop {
         // check if quit channel got message
         let mut cfg = config.write().unwrap();
-        match &cfg.quit_rx {
-            None => {}
-            Some(ch) => {
-                if ch.try_recv().is_ok() {
-                    break;
-                }
+        match quit_rx.try_recv() {
+            Ok(_) | Err(TryRecvError::Disconnected) => {
+                cfg.shutdown = true;
+                break;
             }
+            Err(TryRecvError::Empty) => {}
         }
         // allow to pool again if waker is set
         if let Some(waker) = cfg.waker.take() {
@@ -162,21 +166,58 @@ where
 // Procedure B of DAG consensus
 fn procedureB<P, D>(core: Arc<RwLock<DAGcore<P, D>>>)
 where
-    P: PeerId,
+    P: PeerId + 'static,
 {
     let config = { core.read().unwrap().conf.clone() };
+    let (transport_type, store_type, request_bind_address) = {
+        let cfg = config.read().unwrap();
+        (
+            cfg.transport_type.clone(),
+            cfg.store_type.clone(),
+            cfg.request_addr.clone(),
+        )
+    };
+    let mut sync_req_receiver = {
+        match transport_type {
+            libtransport::TransportType::TCP => {
+                <TCPreceiver<SyncReq<P>> as libtransport::TransportReceiver<
+                    P,
+                    sync::SyncReq<P>,
+                    errors::Error,
+                    peer::DAGPeerList<P>,
+                >>::new(request_bind_address)
+                .unwrap()
+            }
+            libtransport::TransportType::Unknown => panic!("unknown transport"),
+        }
+    };
+    let sync_reply_sender = {
+        match transport_type {
+            libtransport::TransportType::TCP => {
+                <TCPsender<SyncReply<P>> as libtransport::TransportSender<
+                    P,
+                    sync::SyncReply<P>,
+                    errors::Error,
+                    peer::DAGPeerList<P>,
+                >>::new()
+                .unwrap()
+            }
+            libtransport::TransportType::Unknown => panic!("unknown transport"),
+        }
+    };
+    let fut = sync_req_receiver.try_for_each(|sync_req| {});
 }
 
 impl<P, D> Consensus<'_, D> for DAG<P, D>
 where
     P: PeerId + 'static,
-    D: Serialize + DeserializeOwned + Send + Clone + 'static,
+    D: Serialize + DeserializeOwned + Send + Sync + Clone + 'static,
 {
     type Configuration = DAGconfig<P, D>;
 
     fn new(mut cfg: DAGconfig<P, D>) -> BaseResult<DAG<P, D>> {
         let (tx, rx) = mpsc::channel();
-        cfg.set_quit_rx(rx);
+        //cfg.set_quit_rx(rx);
         let bind_addr = cfg.request_addr.clone();
         let reply_addr = cfg.reply_addr.clone();
         let transport_type = cfg.transport_type.clone();
@@ -236,11 +277,14 @@ where
 
         //        let cfg_mutexed = Arc::new(Mutex::new(cfg));
         //        let config = Arc::clone(&cfg_mutexed);
-        let handle = thread::spawn(|| listener(core.clone()));
+        let listener_core = core.clone();
+        let handle = thread::spawn(|| listener(listener_core, rx));
         //        let configA = Arc::clone(&cfg_mutexed);
-        let procA_handle = thread::spawn(|| procedureA(core.clone()));
+        let core_A = core.clone();
+        let procA_handle = thread::spawn(|| procedureA(core_A));
         //        let configB = Arc::clone(&cfg_mutexed);
-        let procB_handle = thread::spawn(|| procedureB(core.clone()));
+        let core_B = core.clone();
+        let procB_handle = thread::spawn(|| procedureB(core_B));
         return Ok(DAG {
             core: core,
             quit_tx: tx,
@@ -257,7 +301,7 @@ where
     }
 
     fn send_transaction(&mut self, data: D) -> BaseResult<()> {
-        let core = self.core.write().unwrap();
+        let mut core = self.core.write().unwrap();
         // Vec::push() panics when number of elements overflows `usize`
         if core.tx_pool.len() == std::usize::MAX {
             return Err(AtMaxVecCapacity);
@@ -282,7 +326,7 @@ where
 {
     // send internal transaction
     fn send_internal_transaction(&mut self, tx: InternalTransaction<P>) -> Result<()> {
-        let core = self.core.write().unwrap();
+        let mut core = self.core.write().unwrap();
         // Vec::push() panics when number of elements overflows `usize`
         if core.internal_tx_pool.len() == std::usize::MAX {
             return Err(Error::Base(AtMaxVecCapacity));
@@ -303,7 +347,7 @@ where
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let myself = Pin::get_mut(self);
         let config = {
-            let core = self.core.write().unwrap();
+            let core = myself.core.write().unwrap();
             Arc::clone(&core.conf)
         };
         let mut cfg = config.write().unwrap();

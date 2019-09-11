@@ -9,10 +9,10 @@ use serde::{Deserialize, Serialize};
 // Sync request
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SyncReq<P: Hash + Eq> {
-    from: P,
-    to: P,
-    gossip_list: GossipList<P>,
-    lamport_time: LamportTime,
+    pub(crate) from: P,
+    pub(crate) to: P,
+    pub(crate) gossip_list: GossipList<P>,
+    pub(crate) lamport_time: LamportTime,
 }
 
 impl<P> Stub for SyncReq<P> where P: PeerId {}
@@ -20,9 +20,9 @@ impl<P> Stub for SyncReq<P> where P: PeerId {}
 // Sync Reply
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SyncReply<P: Hash + Eq> {
-    from: P,
-    to: P,
-    gossip_list: GossipList<P>,
-    lamport_time: LamportTime,
-    events: Vec<Event<P>>,
+    pub(crate) from: P,
+    pub(crate) to: P,
+    pub(crate) gossip_list: GossipList<P>,
+    pub(crate) lamport_time: LamportTime,
+    pub(crate) events: Vec<Event<P>>,
 }

@@ -7,7 +7,7 @@ use crate::flag_table::FlagTable;
 use libcommon_rs::peer::PeerId;
 
 #[derive(Clone)]
-pub(crate) enum StoreType {
+pub enum StoreType {
     Unknown,
     Sled,
 }
