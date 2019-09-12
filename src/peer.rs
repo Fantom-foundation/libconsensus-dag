@@ -14,7 +14,13 @@ use std::ops::{Index, IndexMut};
 pub(crate) type Frame = usize;
 pub(crate) type Height = usize;
 
-pub(crate) type GossipList<P> = HashMap<P, LamportTime>;
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub(crate) struct Gossip {
+    lamport_time: LamportTime,
+    height: Height,
+}
+
+pub(crate) type GossipList<P> = HashMap<P, Gossip>;
 pub(crate) type SuspectList<P> = HashMap<P, LamportTime>;
 
 // Peer attributes
@@ -165,8 +171,26 @@ where
     pub fn get_gossip_list(&self) -> GossipList<P> {
         let mut g = GossipList::<P>::new();
         for (_i, p) in self.peers.iter().enumerate() {
-            g.insert(p.id.clone(), p.lamport_time.clone());
+            g.insert(
+                p.id.clone(),
+                Gossip {
+                    lamport_time: p.lamport_time.clone(),
+                    height: p.height.clone(),
+                },
+            );
         }
         g
+    }
+
+    // Find a peer for read only operations
+    pub fn find_peer(&self, id: P) -> Result<DAGPeer<P>> {
+        let p_ref = self.peers.iter().find(|&x| x.id == id)?;
+        Ok(p_ref.clone())
+    }
+
+    // Find a peer for read/write operations
+    pub fn find_peer_ref(&mut self, id: P) -> Result<&mut DAGPeer<P>> {
+        let mut p_ref = self.peers.iter_mut().find(|x| x.id == id)?;
+        Ok(p_ref)
     }
 }

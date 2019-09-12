@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct Event<P> {
     pub(crate) creator: P,
-    height: u64,
+    pub(crate) height: u64,
     self_parent: EventHash,
     other_parent: EventHash,
     lamport_timestamp: LamportTime,

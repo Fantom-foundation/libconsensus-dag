@@ -43,9 +43,13 @@ where
     // function set_event() writes Event into storage; returns True on success and
     // False on failure
     fn set_event(&mut self, e: Event<P>) -> Result<()> {
-        let key = e.hash.clone().to_vec();
         let e_bytes = serialize(&e)?;
-        self.event.insert(key, e_bytes)?;
+        // Store serialized event with hash as a key.
+        let key = e.hash.clone().to_vec();
+        self.event.insert(key, e_bytes.clone())?;
+        // Store serialized event with creator and creator's height as a key.
+        let key2 = format!("{}-{}", e.creator, e.height).into_bytes();
+        self.event.insert(key2, e_bytes)?;
         if self.sync {
             self.event.flush()?;
         }

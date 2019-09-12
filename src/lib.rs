@@ -1,8 +1,11 @@
+#![feature(try_trait)]
 #[global_allocator]
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 #[macro_use]
 extern crate crossbeam_channel;
+#[macro_use]
+extern crate log;
 #[macro_use]
 extern crate libconsensus;
 use crate::conf::DAGconfig;
@@ -15,9 +18,10 @@ use crate::store_sled::SledStore;
 use crate::sync::{SyncReply, SyncReq};
 use crate::transactions::InternalTransaction;
 use crossbeam_channel::tick;
+use futures::executor::block_on;
 use futures::future;
 use futures::stream::Stream;
-use futures::stream::{self, StreamExt, TryStreamExt};
+use futures::stream::StreamExt;
 use futures::task::Context;
 use futures::task::Poll;
 use libcommon_rs::peer::PeerId;
@@ -66,6 +70,7 @@ where
     P: PeerId,
 {
     conf: Arc<RwLock<DAGconfig<P, Data>>>,
+    store: Arc<RwLock<dyn DAGstore<P>>>,
     tx_pool: Vec<Data>,
     internal_tx_pool: Vec<InternalTransaction<P>>,
     lamport_time: LamportTime,
@@ -109,9 +114,9 @@ where
         let cfg = config.read().unwrap();
         tick(Duration::from_millis(cfg.heartbeat))
     };
-    let (transport_type, store_type) = {
+    let transport_type = {
         let cfg = config.read().unwrap();
-        (cfg.transport_type.clone(), cfg.store_type.clone())
+        cfg.transport_type.clone()
     };
     // setup TransportSender for Sync Request.
     let sync_req_sender = {
@@ -126,16 +131,6 @@ where
                 .unwrap()
             }
             libtransport::TransportType::Unknown => panic!("unknown transport"),
-        }
-    };
-    // setup Store for procedure A
-    let store = {
-        match store_type {
-            crate::store::StoreType::Unknown => panic!("unknown DAG store"),
-            crate::store::StoreType::Sled => {
-                // FIXME: we should use a configurable parameter for store location instead of "./sled_store"
-                <SledStore as DAGstore<P>>::new("./sled_store").unwrap()
-            }
         }
     };
     // DAG procedure A loop
@@ -169,13 +164,9 @@ where
     P: PeerId + 'static,
 {
     let config = { core.read().unwrap().conf.clone() };
-    let (transport_type, store_type, request_bind_address) = {
+    let (transport_type, request_bind_address) = {
         let cfg = config.read().unwrap();
-        (
-            cfg.transport_type.clone(),
-            cfg.store_type.clone(),
-            cfg.request_addr.clone(),
-        )
+        (cfg.transport_type.clone(), cfg.request_addr.clone())
     };
     let mut sync_req_receiver = {
         match transport_type {
@@ -205,7 +196,12 @@ where
             libtransport::TransportType::Unknown => panic!("unknown transport"),
         }
     };
-    let fut = sync_req_receiver.try_for_each(|sync_req| {});
+    let store = { core.read().unwrap().store.clone() };
+    block_on(async {
+        while let Some(sync_req) = sync_req_receiver.next().await {
+            debug!("{} Sync request from {}", sync_req.to, sync_req.from);
+        }
+    });
 }
 
 impl<P, D> Consensus<'_, D> for DAG<P, D>
@@ -221,6 +217,7 @@ where
         let bind_addr = cfg.request_addr.clone();
         let reply_addr = cfg.reply_addr.clone();
         let transport_type = cfg.transport_type.clone();
+        let store_type = cfg.store_type.clone();
         let mut sr_transport = {
             match transport_type {
                 libtransport::TransportType::TCP => {
@@ -247,9 +244,19 @@ where
                 libtransport::TransportType::Unknown => panic!("unknown transport"),
             }
         };
+        let store = {
+            match store_type {
+                crate::store::StoreType::Unknown => panic!("unknown DAG store"),
+                crate::store::StoreType::Sled => {
+                    // FIXME: we should use a configurable parameter for store location instead of "./sled_store"
+                    <SledStore as DAGstore<P>>::new("./sled_store").unwrap()
+                }
+            }
+        };
 
         let core = Arc::new(RwLock::new(DAGcore {
             conf: Arc::new(RwLock::new(cfg)),
+            store: Arc::new(RwLock::new(store)),
             tx_pool: Vec::with_capacity(1),
             internal_tx_pool: Vec::with_capacity(1),
             lamport_time: 0,

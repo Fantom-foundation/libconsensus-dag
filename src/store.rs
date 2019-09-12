@@ -12,7 +12,7 @@ pub enum StoreType {
     Sled,
 }
 
-pub(crate) trait DAGstore<P>
+pub(crate) trait DAGstore<P>: Send + Sync
 where
     P: PeerId,
 {

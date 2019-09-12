@@ -1,4 +1,5 @@
 use libconsensus::errors::Error as BaseError;
+use std::option::NoneError;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -9,6 +10,14 @@ pub enum Error {
     Sled(sled::Error),
     Io(std::io::Error),
     SerdeJson(serde_json::error::Error),
+    NoneError(NoneError),
+}
+
+impl From<NoneError> for Error {
+    #[inline]
+    fn from(none_error: NoneError) -> Error {
+        Error::NoneError(none_error)
+    }
 }
 
 impl From<sled::Error> for Error {
