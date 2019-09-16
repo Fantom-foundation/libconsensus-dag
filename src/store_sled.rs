@@ -2,8 +2,11 @@ extern crate sled;
 
 use crate::event::Event;
 use crate::event_hash::EventHash;
+use crate::peer::GossipList;
+use crate::peer::Height;
 use crate::store::*;
 use bincode::{deserialize, serialize};
+use std::option::NoneError;
 //use log::warn;
 use crate::errors::{Error, Result};
 use crate::flag_table::FlagTable;
@@ -60,7 +63,7 @@ where
         let key = ex.to_vec();
         match self.event.get(&*key)? {
             Some(x) => Ok(deserialize::<Event<P>>(&x)?),
-            None => Err(Error::Base(none_error!())),
+            None => Err(Error::NoneError(NoneError)),
         }
     }
 
@@ -78,7 +81,34 @@ where
         let key = ex.to_vec();
         match self.flag_table.get(&*key)? {
             Some(x) => Ok(deserialize::<FlagTable>(&x)?),
-            None => Err(Error::Base(none_error!())),
+            None => Err(Error::NoneError(NoneError)),
         }
+    }
+
+    fn get_event_of_creator(&mut self, creator: &P, height: &Height) -> Result<Event<P>> {
+        let key = format!("{}-{}", creator, height).into_bytes();
+        match self.event.get(&*key)? {
+            Some(x) => Ok(deserialize::<Event<P>>(&x)?),
+            None => Err(Error::NoneError(NoneError)),
+        }
+    }
+
+    fn get_events_for_gossip(&self, gossip: &GossipList<P>) -> Result<Vec<Event<P>>> {
+        let events: Vec<Event<P>> = Vec::with_capacity(1);
+        for (peer, gossip) in gossip.iter() {
+            let height = gossip.height + 1;
+            loop {
+                match self.get_event_of_creator(&peer, &height) {
+                    Err(NoneError) => break,
+                    Err(e) => Err(e),
+                    Ok(event) => {
+                        events.push(event);
+                        height = height + 1;
+                        Ok(())
+                    }
+                }
+            }
+        }
+        Ok(events)
     }
 }

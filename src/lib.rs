@@ -6,20 +6,19 @@ static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 extern crate crossbeam_channel;
 #[macro_use]
 extern crate log;
-#[macro_use]
 extern crate libconsensus;
 use crate::conf::DAGconfig;
 use crate::errors::{Error, Result};
 use crate::lamport_time::LamportTime;
 use crate::peer::DAGPeerList;
 use crate::peer::Frame;
+use crate::peer::GossipList;
 use crate::store::DAGstore;
 use crate::store_sled::SledStore;
 use crate::sync::{SyncReply, SyncReq};
 use crate::transactions::InternalTransaction;
 use crossbeam_channel::tick;
 use futures::executor::block_on;
-use futures::future;
 use futures::stream::Stream;
 use futures::stream::StreamExt;
 use futures::task::Context;
@@ -34,6 +33,7 @@ use libtransport::TransportSender;
 use libtransport_tcp::receiver::TCPreceiver;
 use libtransport_tcp::sender::TCPsender;
 use libtransport_tcp::TCPtransport;
+use log::error;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::pin::Pin;
@@ -122,13 +122,7 @@ where
     let sync_req_sender = {
         match transport_type {
             libtransport::TransportType::TCP => {
-                <TCPsender<SyncReq<P>> as libtransport::TransportSender<
-                    P,
-                    sync::SyncReq<P>,
-                    errors::Error,
-                    peer::DAGPeerList<P>,
-                >>::new()
-                .unwrap()
+                TCPsender::<P, SyncReq<P>, errors::Error, peer::DAGPeerList<P>>::new().unwrap()
             }
             libtransport::TransportType::Unknown => panic!("unknown transport"),
         }
@@ -143,7 +137,7 @@ where
             break;
         }
         let peer = cfg.peers.next_peer();
-        let gossip_list = cfg.peers.get_gossip_list();
+        let gossip_list: GossipList<P> = cfg.peers.get_gossip_list();
         let request = SyncReq {
             from: cfg.peers[0].id.clone(), // we assume creator is the peer of index 0
             to: peer.id,
@@ -171,27 +165,16 @@ where
     let mut sync_req_receiver = {
         match transport_type {
             libtransport::TransportType::TCP => {
-                <TCPreceiver<SyncReq<P>> as libtransport::TransportReceiver<
-                    P,
-                    sync::SyncReq<P>,
-                    errors::Error,
-                    peer::DAGPeerList<P>,
-                >>::new(request_bind_address)
-                .unwrap()
+                TCPreceiver::<P, SyncReq<P>, Error, DAGPeerList<P>>::new(request_bind_address)
+                    .unwrap()
             }
             libtransport::TransportType::Unknown => panic!("unknown transport"),
         }
     };
-    let sync_reply_sender = {
+    let mut sync_reply_sender = {
         match transport_type {
             libtransport::TransportType::TCP => {
-                <TCPsender<SyncReply<P>> as libtransport::TransportSender<
-                    P,
-                    sync::SyncReply<P>,
-                    errors::Error,
-                    peer::DAGPeerList<P>,
-                >>::new()
-                .unwrap()
+                TCPsender::<P, SyncReply<P>, Error, DAGPeerList<P>>::new().unwrap()
             }
             libtransport::TransportType::Unknown => panic!("unknown transport"),
         }
@@ -200,6 +183,34 @@ where
     block_on(async {
         while let Some(sync_req) = sync_req_receiver.next().await {
             debug!("{} Sync request from {}", sync_req.to, sync_req.from);
+            match store
+                .read()
+                .unwrap()
+                .get_events_for_gossip(&sync_req.gossip_list)
+            {
+                Err(e) => error!("Procedure B: get_events_for_gossip() error: {:?}", e),
+                Ok(events) => {
+                    let gossip_list: GossipList<P> = config.read().unwrap().peers.get_gossip_list();
+                    let reply = SyncReply::<P> {
+                        from: sync_req.to,
+                        to: sync_req.from,
+                        gossip_list,
+                        lamport_time: { core.read().unwrap().lamport_time.clone() },
+                        events,
+                    };
+                    match config.read().unwrap().peers.find_peer(reply.to.clone()) {
+                        Ok(peer) => {
+                            let address = peer.reply_addr.clone();
+                            let res = sync_reply_sender.send(address, reply);
+                            match res {
+                                Ok(()) => {}
+                                Err(e) => error!("error sendinf sync reply: {:?}", e),
+                            }
+                        }
+                        Err(e) => error!("peer {} find error: {:?}", reply.to, e),
+                    }
+                }
+            }
         }
     });
 }
@@ -221,12 +232,7 @@ where
         let mut sr_transport = {
             match transport_type {
                 libtransport::TransportType::TCP => {
-                    <TCPtransport<SyncReq<P>> as libtransport::Transport<
-                        P,
-                        sync::SyncReq<P>,
-                        errors::Error,
-                        peer::DAGPeerList<P>,
-                    >>::new(bind_addr)?
+                    TCPtransport::<P, SyncReq<P>, Error, DAGPeerList<P>>::new(bind_addr)?
                 }
                 libtransport::TransportType::Unknown => panic!("unknown transport"),
             }
@@ -234,12 +240,7 @@ where
         let mut sp_transport = {
             match transport_type {
                 libtransport::TransportType::TCP => {
-                    <TCPtransport<SyncReply<P>> as libtransport::Transport<
-                        P,
-                        sync::SyncReply<P>,
-                        errors::Error,
-                        peer::DAGPeerList<P>,
-                    >>::new(reply_addr)?
+                    TCPtransport::<P, SyncReply<P>, Error, DAGPeerList<P>>::new(reply_addr)?
                 }
                 libtransport::TransportType::Unknown => panic!("unknown transport"),
             }

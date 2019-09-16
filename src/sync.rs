@@ -26,3 +26,5 @@ pub struct SyncReply<P: Hash + Eq> {
     pub(crate) lamport_time: LamportTime,
     pub(crate) events: Vec<Event<P>>,
 }
+
+impl<P> Stub for SyncReply<P> where P: PeerId {}

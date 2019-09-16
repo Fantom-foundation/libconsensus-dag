@@ -4,6 +4,8 @@ use crate::errors::Result;
 use crate::event::Event;
 use crate::event_hash::EventHash;
 use crate::flag_table::FlagTable;
+use crate::peer::GossipList;
+use crate::peer::Height;
 use libcommon_rs::peer::PeerId;
 
 #[derive(Clone)]
@@ -27,9 +29,14 @@ where
     // Read Event with EventHash
     fn get_event(&mut self, ex: &EventHash) -> Result<Event<P>>;
 
+    // Read Event with Creator and Height
+    fn get_event_of_creator(&mut self, creator: &P, height: &Height) -> Result<Event<P>>;
+
     // Writes FlagTable into storage for specifid EventHash
     fn set_flag_table(&mut self, ex: &EventHash, ft: FlagTable) -> Result<()>;
 
     // Read FlagTable with EventHash
     fn get_flag_table(&mut self, ex: &EventHash) -> Result<FlagTable>;
+
+    fn get_events_for_gossip(&self, gossip: &GossipList<P>) -> Result<Vec<Event<P>>>;
 }

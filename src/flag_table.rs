@@ -6,6 +6,7 @@ use crate::peer::Frame;
 use crate::store::DAGstore;
 use libcommon_rs::peer::PeerId;
 use std::collections::HashMap;
+use std::option::NoneError;
 
 // FlagTable is a map from EventHash into Frame number
 pub(crate) type FlagTable = HashMap<EventHash, Frame>;
@@ -70,7 +71,7 @@ fn derive_creator_table<P: PeerId, S: DAGstore<P>>(
     let mut result = CreatorFlagTable::new();
     for (key, value) in ft.iter() {
         match store.get_event(key) {
-            Err(Error::Base(none_error!())) => warn!("Event {:?} not found", key),
+            Err(Error::NoneError(NoneError)) => warn!("Event {:?} not found", key),
             Err(e) => error!("Error {:?} encountered while retrieving event {:?}", e, key),
             Ok(e) => match result.get(&e.creator) {
                 Some(frame) => {

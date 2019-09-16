@@ -1,14 +1,14 @@
-use libconsensus::errors::Error::AtMaxVecCapacity;
-use std::collections::HashMap;
-
 use crate::errors::{Error, Result};
 use crate::lamport_time::LamportTime;
 use core::slice::{Iter, IterMut};
 use libcommon_rs::peer::{Peer, PeerId, PeerList};
+use libconsensus::errors::Error::AtMaxVecCapacity;
 use libconsensus::BaseConsensusPeer;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
+use std::net::SocketAddr;
 use std::ops::{Index, IndexMut};
 
 pub(crate) type Frame = usize;
@@ -16,8 +16,8 @@ pub(crate) type Height = usize;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct Gossip {
-    lamport_time: LamportTime,
-    height: Height,
+    pub(crate) lamport_time: LamportTime,
+    pub(crate) height: Height,
 }
 
 pub(crate) type GossipList<P> = HashMap<P, Gossip>;
@@ -29,7 +29,9 @@ pub struct DAGPeer<P> {
     #[serde(rename = "PubKeyHex")]
     pub(crate) id: P,
     #[serde(rename = "NetAddr")]
-    pub(crate) net_addr: String,
+    pub(crate) request_addr: String,
+    #[serde(skip, default)]
+    pub(crate) reply_addr: String,
     #[serde(skip, default)]
     height: Height,
     #[serde(skip, default)]
@@ -41,23 +43,31 @@ where
     P: PeerId,
 {
     fn from(bp: BaseConsensusPeer<P>) -> DAGPeer<P> {
+        let mut socket: SocketAddr = bp.net_addr.clone().parse().unwrap();
+        let port = socket.port();
+        socket.set_port(port + 1);
         DAGPeer {
             id: bp.id,
-            net_addr: bp.net_addr,
+            request_addr: bp.net_addr,
+            reply_addr: socket.to_string(),
             height: 0,
             lamport_time: 0,
         }
     }
 }
 
-impl<P> Peer<P> for DAGPeer<P>
+impl<P> Peer<P, Error> for DAGPeer<P>
 where
     P: PeerId,
 {
     fn new(id: P, net_addr: String) -> Self {
+        let mut socket: SocketAddr = net_addr.clone().parse().unwrap();
+        let port = socket.port();
+        socket.set_port(port + 1);
         DAGPeer {
             id,
-            net_addr,
+            request_addr: net_addr,
+            reply_addr: socket.to_string(),
             height: 0,
             lamport_time: 0,
         }
@@ -65,8 +75,29 @@ where
     fn get_id(&self) -> P {
         self.id.clone()
     }
-    fn get_net_addr(&self) -> String {
-        self.net_addr.clone()
+    fn get_base_addr(&self) -> String {
+        self.request_addr.clone()
+    }
+    fn get_net_addr(&self, n: usize) -> String {
+        match n {
+            0 => self.request_addr.clone(),
+            1 => self.reply_addr.clone(),
+            // FIXME: should we return Err() in that case?
+            _ => self.request_addr.clone(),
+        }
+    }
+    fn set_net_addr(&mut self, n: usize, addr: String) -> std::result::Result<(), Error> {
+        match n {
+            0 => {
+                self.request_addr = addr;
+                Ok(())
+            }
+            1 => {
+                self.reply_addr = addr;
+                Ok(())
+            }
+            _ => Err(Error::Base(AtMaxVecCapacity)),
+        }
     }
 }
 
