@@ -85,7 +85,7 @@ where
         }
     }
 
-    fn get_event_of_creator(&mut self, creator: &P, height: &Height) -> Result<Event<P>> {
+    fn get_event_of_creator(&self, creator: P, height: Height) -> Result<Event<P>> {
         let key = format!("{}-{}", creator, height).into_bytes();
         match self.event.get(&*key)? {
             Some(x) => Ok(deserialize::<Event<P>>(&x)?),
@@ -94,19 +94,23 @@ where
     }
 
     fn get_events_for_gossip(&self, gossip: &GossipList<P>) -> Result<Vec<Event<P>>> {
-        let events: Vec<Event<P>> = Vec::with_capacity(1);
+        let mut events: Vec<Event<P>> = Vec::with_capacity(1);
         for (peer, gossip) in gossip.iter() {
-            let height = gossip.height + 1;
+            let mut height = gossip.height + 1;
             loop {
-                match self.get_event_of_creator(&peer, &height) {
-                    Err(NoneError) => break,
-                    Err(e) => Err(e),
-                    Ok(event) => {
-                        events.push(event);
-                        height = height + 1;
-                        Ok(())
+                let event = match self.get_event_of_creator(peer.clone(), height.clone()) {
+                    Err(e) => {
+                        if e == Error::NoneError(NoneError) {
+                            break;
+                        } else {
+                            return Err(e);
+                        }
                     }
-                }
+                    Ok(event) => event,
+                };
+
+                events.push(event);
+                height = height + 1;
             }
         }
         Ok(events)

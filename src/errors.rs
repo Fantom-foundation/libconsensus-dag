@@ -54,3 +54,40 @@ impl From<BaseError> for Error {
         Error::Base(b)
     }
 }
+
+impl PartialEq for Error {
+    fn eq(&self, other: &Error) -> bool {
+        match *self {
+            Error::NoneError(ref l) => {
+                if let Error::NoneError(r) = other {
+                    l == r
+                } else {
+                    false
+                }
+            }
+            Error::SerdeJson(ref _l) => {
+                // FIXME: serde_json::error::Error has no PartialEq trait implemented
+                false
+            }
+            Error::Io(ref _l) => {
+                // FIXME: std::io::Error has no PartialEq trait implemented
+                false
+            }
+            Error::Sled(ref l) => {
+                if let Error::Sled(ref r) = *other {
+                    l == r
+                } else {
+                    false
+                }
+            }
+            Error::Bincode(ref _l) => {
+                // FIXME: add comparison for bincode::Error
+                false
+            }
+            Error::Base(ref _l) => {
+                // FIXME: implement PartialEq trait for libconsensus::errors::Error
+                false
+            }
+        }
+    }
+}

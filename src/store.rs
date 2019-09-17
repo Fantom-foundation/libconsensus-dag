@@ -30,7 +30,7 @@ where
     fn get_event(&mut self, ex: &EventHash) -> Result<Event<P>>;
 
     // Read Event with Creator and Height
-    fn get_event_of_creator(&mut self, creator: &P, height: &Height) -> Result<Event<P>>;
+    fn get_event_of_creator(&self, creator: P, height: Height) -> Result<Event<P>>;
 
     // Writes FlagTable into storage for specifid EventHash
     fn set_flag_table(&mut self, ex: &EventHash, ft: FlagTable) -> Result<()>;
