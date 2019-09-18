@@ -47,6 +47,7 @@ use std::time::Duration;
 // DAG node structure
 pub struct DAG<P, T>
 where
+    T: Serialize + DeserializeOwned + Send + Clone,
     P: PeerId,
 {
     //    conf: Arc<Mutex<DAGconfig<P, T>>>,
@@ -67,6 +68,7 @@ where
 
 pub(crate) struct DAGcore<P, Data>
 where
+    Data: Serialize + DeserializeOwned + Send + Clone,
     P: PeerId,
 {
     conf: Arc<RwLock<DAGconfig<P, Data>>>,
@@ -105,8 +107,9 @@ where
 }
 
 // Procedure A of DAG consensus
-fn procedureA<P: 'static, D>(core: Arc<RwLock<DAGcore<P, D>>>)
+fn procedure_a<P: 'static, D>(core: Arc<RwLock<DAGcore<P, D>>>)
 where
+    D: Serialize + DeserializeOwned + Send + Clone,
     P: PeerId,
 {
     let config = { core.read().unwrap().conf.clone() };
@@ -114,15 +117,24 @@ where
         let cfg = config.read().unwrap();
         tick(Duration::from_millis(cfg.heartbeat))
     };
-    let transport_type = {
+    let (transport_type, reply_bind_address) = {
         let cfg = config.read().unwrap();
-        cfg.transport_type.clone()
+        (cfg.transport_type.clone(), cfg.reply_addr.clone())
     };
     // setup TransportSender for Sync Request.
-    let sync_req_sender = {
+    let mut sync_req_sender = {
         match transport_type {
             libtransport::TransportType::TCP => {
                 TCPsender::<P, SyncReq<P>, errors::Error, peer::DAGPeerList<P>>::new().unwrap()
+            }
+            libtransport::TransportType::Unknown => panic!("unknown transport"),
+        }
+    };
+    let mut sync_reply_receiver = {
+        match transport_type {
+            libtransport::TransportType::TCP => {
+                TCPreceiver::<P, SyncReply<P>, Error, DAGPeerList<P>>::new(reply_bind_address)
+                    .unwrap()
             }
             libtransport::TransportType::Unknown => panic!("unknown transport"),
         }
@@ -136,14 +148,40 @@ where
             // FIXME: need to be implemented
             break;
         }
+        // choose the next peer and send Sync Request to it.
         let peer = cfg.peers.next_peer();
         let gossip_list: GossipList<P> = cfg.peers.get_gossip_list();
         let request = SyncReq {
-            from: cfg.peers[0].id.clone(), // we assume creator is the peer of index 0
+            from: cfg.peers[0].id.clone(), // FIXME: we assume creator is the peer of index 0
             to: peer.id,
             gossip_list,
             lamport_time: { core.read().unwrap().lamport_time.clone() },
         };
+        match sync_req_sender.send(peer.request_addr, request) {
+            Ok(()) => {}
+            Err(e) => error!("error sending sync request: {:?}", e),
+        }
+
+        // Receive Sync Reply and process it.
+        // NB: it may not be from the very same peer we have sent Sync Request above.
+        block_on(async {
+            if let Some(sync_reply) = sync_reply_receiver.next().await {
+                debug!(
+                    "{} Sync Reply from {}",
+                    sync_reply.to.clone(),
+                    sync_reply.from.clone()
+                );
+                // update Lamport timestamp of the node
+                {
+                    core.write()
+                        .unwrap()
+                        .update_lamport_time(sync_reply.lamport_time);
+                }
+            }
+        });
+
+        // create new event if needed referring remote peer as other-parent
+        // FIXME: need to be implemented
 
         // wait until hearbeat interval expires
         select! {
@@ -153,8 +191,9 @@ where
 }
 
 // Procedure B of DAG consensus
-fn procedureB<P, D>(core: Arc<RwLock<DAGcore<P, D>>>)
+fn procedure_b<P, D>(core: Arc<RwLock<DAGcore<P, D>>>)
 where
+    D: Serialize + DeserializeOwned + Send + Clone,
     P: PeerId + 'static,
 {
     let config = { core.read().unwrap().conf.clone() };
@@ -183,6 +222,11 @@ where
     block_on(async {
         while let Some(sync_req) = sync_req_receiver.next().await {
             debug!("{} Sync request from {}", sync_req.to, sync_req.from);
+            {
+                core.write()
+                    .unwrap()
+                    .update_lamport_time(sync_req.lamport_time);
+            }
             match store
                 .read()
                 .unwrap()
@@ -198,7 +242,16 @@ where
                         lamport_time: { core.read().unwrap().lamport_time.clone() },
                         events,
                     };
-                    match config.read().unwrap().peers.find_peer(reply.to.clone()) {
+                    match {
+                        config
+                            .write()
+                            .unwrap()
+                            .peers
+                            .find_peer_with_lamport_time_update(
+                                reply.to.clone(),
+                                sync_req.lamport_time,
+                            )
+                    } {
                         Ok(peer) => {
                             let address = peer.reply_addr.clone();
                             let res = sync_reply_sender.send(address, reply);
@@ -288,17 +341,17 @@ where
         let listener_core = core.clone();
         let handle = thread::spawn(|| listener(listener_core, rx));
         //        let configA = Arc::clone(&cfg_mutexed);
-        let core_A = core.clone();
-        let procA_handle = thread::spawn(|| procedureA(core_A));
+        let core_a = core.clone();
+        let proc_a_handle = thread::spawn(|| procedure_a(core_a));
         //        let configB = Arc::clone(&cfg_mutexed);
-        let core_B = core.clone();
-        let procB_handle = thread::spawn(|| procedureB(core_B));
+        let core_b = core.clone();
+        let proc_b_handle = thread::spawn(|| procedure_b(core_b));
         return Ok(DAG {
             core: core,
             quit_tx: tx,
             listener_handle: Some(handle),
-            procA_handle: Some(procA_handle),
-            procB_handle: Some(procB_handle),
+            procA_handle: Some(proc_a_handle),
+            procB_handle: Some(proc_b_handle),
         });
     }
 
@@ -321,6 +374,7 @@ where
 
 impl<P, D> Drop for DAG<P, D>
 where
+    D: Serialize + DeserializeOwned + Send + Clone,
     P: PeerId,
 {
     fn drop(&mut self) {
@@ -330,6 +384,7 @@ where
 
 impl<P, D> DAG<P, D>
 where
+    D: Serialize + DeserializeOwned + Send + Clone,
     P: PeerId,
 {
     // send internal transaction
@@ -344,12 +399,17 @@ where
     }
 }
 
-impl<P, D> Unpin for DAG<P, D> where P: PeerId {}
+impl<P, D> Unpin for DAG<P, D>
+where
+    D: Serialize + DeserializeOwned + Send + Clone,
+    P: PeerId,
+{
+}
 
 impl<P, Data> Stream for DAG<P, Data>
 where
     P: PeerId,
-    Data: Serialize + DeserializeOwned,
+    Data: Serialize + DeserializeOwned + Send + Clone,
 {
     type Item = Data;
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -362,6 +422,18 @@ where
         // FIXME: need to be implemented
         cfg.waker = Some(cx.waker().clone());
         Poll::Pending
+    }
+}
+
+impl<P, Data> DAGcore<P, Data>
+where
+    P: PeerId,
+    Data: Serialize + DeserializeOwned + Send + Clone,
+{
+    fn update_lamport_time(&mut self, time: LamportTime) {
+        if self.lamport_time < time {
+            self.lamport_time = time;
+        }
     }
 }
 

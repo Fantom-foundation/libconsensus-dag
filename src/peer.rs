@@ -101,6 +101,17 @@ where
     }
 }
 
+impl<P> DAGPeer<P>
+where
+    P: PeerId,
+{
+    fn update_lamport_time(&mut self, time: LamportTime) {
+        if self.lamport_time < time {
+            self.lamport_time = time;
+        }
+    }
+}
+
 pub(crate) struct DAGPeerList<P>
 where
     P: PeerId,
@@ -216,6 +227,19 @@ where
     // Find a peer for read only operations
     pub fn find_peer(&self, id: P) -> Result<DAGPeer<P>> {
         let p_ref = self.peers.iter().find(|&x| x.id == id)?;
+        Ok(p_ref.clone())
+    }
+
+    // Find a peer for read only operations and update its lamport time if needed
+    pub fn find_peer_with_lamport_time_update(
+        &mut self,
+        id: P,
+        time: LamportTime,
+    ) -> Result<DAGPeer<P>> {
+        let mut p_ref = self.peers.iter_mut().find(|x| x.id == id)?;
+        if p_ref.lamport_time < time {
+            p_ref.lamport_time = time;
+        }
         Ok(p_ref.clone())
     }
 
