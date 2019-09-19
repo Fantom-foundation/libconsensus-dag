@@ -1,3 +1,4 @@
+use libcommon_rs::data::DataType;
 use log::{error, warn};
 
 use crate::errors::Error;
@@ -64,11 +65,11 @@ fn open_merge_flag_table(first: &FlagTable, second: &FlagTable, frame_number: Fr
 // This procedure takes a store and a flag table as input
 // and produces a map which stores creator's hashes of visible roots;
 // for each root it stores minimal frame number.
-fn derive_creator_table<P: PeerId, S: DAGstore<P>>(
+fn derive_creator_table<P: PeerId, Data: DataType, S: DAGstore<Data, P>>(
     store: &mut S,
     ft: &FlagTable,
 ) -> CreatorFlagTable<P> {
-    let mut result = CreatorFlagTable::new();
+    let mut result = CreatorFlagTable::<P>::new();
     for (key, value) in ft.iter() {
         match store.get_event(key) {
             Err(Error::NoneError(NoneError)) => warn!("Event {:?} not found", key),

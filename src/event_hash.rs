@@ -25,3 +25,9 @@ impl ToVec<u8> for EventHash {
         self.0.to_vec()
     }
 }
+
+impl Default for EventHash {
+    fn default() -> Self {
+        EventHash { 0: [0; 32] }
+    }
+}

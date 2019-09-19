@@ -105,9 +105,17 @@ impl<P> DAGPeer<P>
 where
     P: PeerId,
 {
-    fn update_lamport_time(&mut self, time: LamportTime) {
+    pub(crate) fn update_lamport_time(&mut self, time: LamportTime) {
         if self.lamport_time < time {
             self.lamport_time = time;
+        }
+    }
+    pub(crate) fn update_lamport_time_and_height(&mut self, time: LamportTime, height: Height) {
+        if self.lamport_time < time {
+            self.lamport_time = time;
+        }
+        if self.height < height {
+            self.height = height;
         }
     }
 }
@@ -121,6 +129,8 @@ where
     n: usize,
     // round robin number
     r: usize,
+    // creator ID for the current node
+    creator: P,
 }
 
 impl<P> Default for DAGPeerList<P>
@@ -132,6 +142,7 @@ where
             peers: Vec::with_capacity(5),
             n: 0,
             r: 0,
+            creator: Default::default(),
         }
     }
 }
@@ -165,6 +176,7 @@ where
             peers: Vec::with_capacity(5),
             n: 0,
             r: 0,
+            creator: Default::default(),
         }
     }
     fn get_peers_from_file(&mut self, json_peer_path: String) -> Result<()> {
@@ -173,6 +185,7 @@ where
         file.read_to_string(&mut data)?;
         let mut v: Vec<DAGPeer<Pid>> = serde_json::from_str(&data)?;
         self.peers.append(&mut v);
+        self.sort_peers();
         Ok(())
     }
 
@@ -183,6 +196,7 @@ where
         self.peers.push(p.into());
         self.n = self.peers.len();
         self.r = self.n >> 1;
+        self.sort_peers();
         Ok(())
     }
     fn iter(&self) -> Iter<'_, Self::P> {
@@ -197,6 +211,30 @@ impl<P> DAGPeerList<P>
 where
     P: PeerId,
 {
+    fn sort_peers(&mut self) {
+        self.peers.sort_by(|a, b| {
+            use std::cmp::Ordering;
+            let a_cmp = a.id == self.creator;
+            let b_cmp = b.id == self.creator;
+            if a_cmp {
+                if b_cmp {
+                    Ordering::Equal
+                } else {
+                    Ordering::Less
+                }
+            } else {
+                if b_cmp {
+                    Ordering::Greater
+                } else {
+                    Ordering::Equal
+                }
+            }
+        })
+    }
+    pub fn set_creator(&mut self, creator: P) {
+        self.creator = creator;
+        self.sort_peers();
+    }
     pub fn next_peer(&mut self) -> DAGPeer<P> {
         // we assume the very first peer in the vector is one
         // cotrresponding to the current node, so the value of `current`
@@ -244,7 +282,7 @@ where
     }
 
     // Find a peer for read/write operations
-    pub fn find_peer_ref(&mut self, id: P) -> Result<&mut DAGPeer<P>> {
+    pub fn find_peer_mut(&mut self, id: P) -> Result<&mut DAGPeer<P>> {
         let mut p_ref = self.peers.iter_mut().find(|x| x.id == id)?;
         Ok(p_ref)
     }

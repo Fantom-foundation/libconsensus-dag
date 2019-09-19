@@ -21,6 +21,7 @@ where
     pub(crate) heartbeat: u64,
     pub(crate) waker: Option<Waker>,
     pub(crate) peers: DAGPeerList<P>,
+    pub(crate) creator: P,
     phantom: PhantomData<Data>,
 }
 
@@ -62,6 +63,7 @@ where
             store_type: StoreType::Unknown,
             waker: None,
             peers: DAGPeerList::new(),
+            creator: Default::default(),
             phantom: PhantomData,
         };
     }

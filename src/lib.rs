@@ -23,6 +23,7 @@ use futures::stream::Stream;
 use futures::stream::StreamExt;
 use futures::task::Context;
 use futures::task::Poll;
+use libcommon_rs::data::DataType;
 use libcommon_rs::peer::PeerId;
 use libconsensus::errors::Error::AtMaxVecCapacity;
 use libconsensus::errors::Result as BaseResult;
@@ -34,8 +35,6 @@ use libtransport_tcp::receiver::TCPreceiver;
 use libtransport_tcp::sender::TCPsender;
 use libtransport_tcp::TCPtransport;
 use log::error;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 use std::pin::Pin;
 use std::sync::mpsc::{self, Sender};
 use std::sync::mpsc::{Receiver, TryRecvError};
@@ -47,7 +46,7 @@ use std::time::Duration;
 // DAG node structure
 pub struct DAG<P, T>
 where
-    T: Serialize + DeserializeOwned + Send + Clone,
+    T: DataType,
     P: PeerId,
 {
     //    conf: Arc<Mutex<DAGconfig<P, T>>>,
@@ -68,11 +67,11 @@ where
 
 pub(crate) struct DAGcore<P, Data>
 where
-    Data: Serialize + DeserializeOwned + Send + Clone,
+    Data: DataType,
     P: PeerId,
 {
     conf: Arc<RwLock<DAGconfig<P, Data>>>,
-    store: Arc<RwLock<dyn DAGstore<P>>>,
+    store: Arc<RwLock<dyn DAGstore<Data, P>>>,
     tx_pool: Vec<Data>,
     internal_tx_pool: Vec<InternalTransaction<P>>,
     lamport_time: LamportTime,
@@ -84,7 +83,7 @@ where
 
 fn listener<P, Data: 'static>(core: Arc<RwLock<DAGcore<P, Data>>>, quit_rx: Receiver<()>)
 where
-    Data: Serialize + DeserializeOwned + Send + Clone,
+    Data: DataType,
     P: PeerId,
 {
     let config = { core.read().unwrap().conf.clone() };
@@ -107,10 +106,10 @@ where
 }
 
 // Procedure A of DAG consensus
-fn procedure_a<P: 'static, D>(core: Arc<RwLock<DAGcore<P, D>>>)
+fn procedure_a<P, D>(core: Arc<RwLock<DAGcore<P, D>>>)
 where
-    D: Serialize + DeserializeOwned + Send + Clone,
-    P: PeerId,
+    D: DataType + 'static,
+    P: PeerId + 'static,
 {
     let config = { core.read().unwrap().conf.clone() };
     let ticker = {
@@ -133,7 +132,7 @@ where
     let mut sync_reply_receiver = {
         match transport_type {
             libtransport::TransportType::TCP => {
-                TCPreceiver::<P, SyncReply<P>, Error, DAGPeerList<P>>::new(reply_bind_address)
+                TCPreceiver::<P, SyncReply<D, P>, Error, DAGPeerList<P>>::new(reply_bind_address)
                     .unwrap()
             }
             libtransport::TransportType::Unknown => panic!("unknown transport"),
@@ -177,11 +176,29 @@ where
                         .unwrap()
                         .update_lamport_time(sync_reply.lamport_time);
                 }
+                // process unknown events
+                for event in sync_reply.events.iter() {
+                    {
+                        config
+                            .write()
+                            .unwrap()
+                            .peers
+                            .find_peer_mut(event.get_creator())
+                            .unwrap()
+                            .update_lamport_time_and_height(
+                                event.get_lamport_time(),
+                                event.get_height(),
+                            );
+                    }
+                }
             }
         });
 
         // create new event if needed referring remote peer as other-parent
         // FIXME: need to be implemented
+        {
+            let mut core_loc = core.write().unwrap();
+        }
 
         // wait until hearbeat interval expires
         select! {
@@ -193,7 +210,7 @@ where
 // Procedure B of DAG consensus
 fn procedure_b<P, D>(core: Arc<RwLock<DAGcore<P, D>>>)
 where
-    D: Serialize + DeserializeOwned + Send + Clone,
+    D: DataType + 'static,
     P: PeerId + 'static,
 {
     let config = { core.read().unwrap().conf.clone() };
@@ -213,7 +230,7 @@ where
     let mut sync_reply_sender = {
         match transport_type {
             libtransport::TransportType::TCP => {
-                TCPsender::<P, SyncReply<P>, Error, DAGPeerList<P>>::new().unwrap()
+                TCPsender::<P, SyncReply<D, P>, Error, DAGPeerList<P>>::new().unwrap()
             }
             libtransport::TransportType::Unknown => panic!("unknown transport"),
         }
@@ -235,7 +252,7 @@ where
                 Err(e) => error!("Procedure B: get_events_for_gossip() error: {:?}", e),
                 Ok(events) => {
                     let gossip_list: GossipList<P> = config.read().unwrap().peers.get_gossip_list();
-                    let reply = SyncReply::<P> {
+                    let reply = SyncReply::<D, P> {
                         from: sync_req.to,
                         to: sync_req.from,
                         gossip_list,
@@ -271,7 +288,7 @@ where
 impl<P, D> Consensus<'_, D> for DAG<P, D>
 where
     P: PeerId + 'static,
-    D: Serialize + DeserializeOwned + Send + Sync + Clone + 'static,
+    D: DataType + 'static,
 {
     type Configuration = DAGconfig<P, D>;
 
@@ -293,7 +310,7 @@ where
         let mut sp_transport = {
             match transport_type {
                 libtransport::TransportType::TCP => {
-                    TCPtransport::<P, SyncReply<P>, Error, DAGPeerList<P>>::new(reply_addr)?
+                    TCPtransport::<P, SyncReply<D, P>, Error, DAGPeerList<P>>::new(reply_addr)?
                 }
                 libtransport::TransportType::Unknown => panic!("unknown transport"),
             }
@@ -303,7 +320,7 @@ where
                 crate::store::StoreType::Unknown => panic!("unknown DAG store"),
                 crate::store::StoreType::Sled => {
                     // FIXME: we should use a configurable parameter for store location instead of "./sled_store"
-                    <SledStore as DAGstore<P>>::new("./sled_store").unwrap()
+                    <SledStore as DAGstore<D, P>>::new("./sled_store").unwrap()
                 }
             }
         };
@@ -374,7 +391,7 @@ where
 
 impl<P, D> Drop for DAG<P, D>
 where
-    D: Serialize + DeserializeOwned + Send + Clone,
+    D: DataType,
     P: PeerId,
 {
     fn drop(&mut self) {
@@ -384,7 +401,7 @@ where
 
 impl<P, D> DAG<P, D>
 where
-    D: Serialize + DeserializeOwned + Send + Clone,
+    D: DataType,
     P: PeerId,
 {
     // send internal transaction
@@ -401,7 +418,7 @@ where
 
 impl<P, D> Unpin for DAG<P, D>
 where
-    D: Serialize + DeserializeOwned + Send + Clone,
+    D: DataType,
     P: PeerId,
 {
 }
@@ -409,7 +426,7 @@ where
 impl<P, Data> Stream for DAG<P, Data>
 where
     P: PeerId,
-    Data: Serialize + DeserializeOwned + Send + Clone,
+    Data: DataType,
 {
     type Item = Data;
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -428,7 +445,7 @@ where
 impl<P, Data> DAGcore<P, Data>
 where
     P: PeerId,
-    Data: Serialize + DeserializeOwned + Send + Clone,
+    Data: DataType,
 {
     fn update_lamport_time(&mut self, time: LamportTime) {
         if self.lamport_time < time {
