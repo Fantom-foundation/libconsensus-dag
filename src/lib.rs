@@ -6,13 +6,10 @@ static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 extern crate log;
 extern crate libconsensus;
 use crate::conf::DAGconfig;
+use crate::core::DAGcore;
 use crate::errors::{Error, Result};
-use crate::lamport_time::LamportTime;
 use crate::peer::DAGPeerList;
-use crate::peer::Frame;
 use crate::peer::GossipList;
-use crate::store::DAGstore;
-use crate::store_sled::SledStore;
 use crate::sync::{SyncReply, SyncReq};
 use crate::transactions::InternalTransaction;
 use futures::executor::block_on;
@@ -22,7 +19,6 @@ use futures::task::Context;
 use futures::task::Poll;
 use libcommon_rs::data::DataType;
 use libcommon_rs::peer::PeerId;
-use libconsensus::errors::Error::AtMaxVecCapacity;
 use libconsensus::errors::Result as BaseResult;
 use libconsensus::Consensus;
 use libtransport::Transport;
@@ -58,22 +54,6 @@ where
     //    lamport_time: LamportTime,
     //    current_frame: Frame,
     //    last_finalised_frame: Option<Frame>,
-    //    sync_request_transport: Box<dyn Transport<P, SyncReq<P>, Error, DAGPeerList<P>> + 'a>,
-    //    sync_reply_transport: Box<dyn Transport<P, SyncReply<P>, Error, DAGPeerList<P>> + 'a>,
-}
-
-pub(crate) struct DAGcore<P, Data>
-where
-    Data: DataType,
-    P: PeerId,
-{
-    conf: Arc<RwLock<DAGconfig<P, Data>>>,
-    store: Arc<RwLock<dyn DAGstore<Data, P>>>,
-    tx_pool: Vec<Data>,
-    internal_tx_pool: Vec<InternalTransaction<P>>,
-    lamport_time: LamportTime,
-    current_frame: Frame,
-    last_finalised_frame: Option<Frame>,
     //    sync_request_transport: Box<dyn Transport<P, SyncReq<P>, Error, DAGPeerList<P>> + 'a>,
     //    sync_reply_transport: Box<dyn Transport<P, SyncReply<P>, Error, DAGPeerList<P>> + 'a>,
 }
@@ -151,7 +131,7 @@ where
             from: cfg.peers[0].id.clone(), // FIXME: we assume creator is the peer of index 0
             to: peer.id,
             gossip_list,
-            lamport_time: { core.read().unwrap().lamport_time.clone() },
+            lamport_time: { core.read().unwrap().get_lamport_time() },
         };
         match sync_req_sender.send(peer.request_addr, request) {
             Ok(()) => {}
@@ -253,7 +233,7 @@ where
                         from: sync_req.to,
                         to: sync_req.from,
                         gossip_list,
-                        lamport_time: { core.read().unwrap().lamport_time.clone() },
+                        lamport_time: { core.read().unwrap().get_lamport_time() },
                         events,
                     };
                     match {
@@ -295,7 +275,6 @@ where
         let bind_addr = cfg.request_addr.clone();
         let reply_addr = cfg.reply_addr.clone();
         let transport_type = cfg.transport_type.clone();
-        let store_type = cfg.store_type.clone();
         let mut sr_transport = {
             match transport_type {
                 libtransport::TransportType::TCP => {
@@ -312,43 +291,8 @@ where
                 libtransport::TransportType::Unknown => panic!("unknown transport"),
             }
         };
-        let store = {
-            match store_type {
-                crate::store::StoreType::Unknown => panic!("unknown DAG store"),
-                crate::store::StoreType::Sled => {
-                    // FIXME: we should use a configurable parameter for store location instead of "./sled_store"
-                    <SledStore as DAGstore<D, P>>::new("./sled_store").unwrap()
-                }
-            }
-        };
 
-        let core = Arc::new(RwLock::new(DAGcore {
-            conf: Arc::new(RwLock::new(cfg)),
-            store: Arc::new(RwLock::new(store)),
-            tx_pool: Vec::with_capacity(1),
-            internal_tx_pool: Vec::with_capacity(1),
-            lamport_time: 0,
-            current_frame: 0,
-            last_finalised_frame: None,
-            //            sync_request_transport: Box::new(sr_transport)
-            //                as Box<
-            //                    dyn libtransport::Transport<
-            //                        P,
-            //                        sync::SyncReq<P>,
-            //                        errors::Error,
-            //                        peer::DAGPeerList<P>,
-            //                    >,
-            //                >,
-            //            sync_reply_transport: Box::new(sp_transport)
-            //                as Box<
-            //                    dyn libtransport::Transport<
-            //                        P,
-            //                        sync::SyncReply<P>,
-            //                        errors::Error,
-            //                        peer::DAGPeerList<P>,
-            //                    >,
-            //                >,
-        }));
+        let core = Arc::new(RwLock::new(DAGcore::new(cfg)));
 
         //        let cfg_mutexed = Arc::new(Mutex::new(cfg));
         //        let config = Arc::clone(&cfg_mutexed);
@@ -377,12 +321,7 @@ where
 
     fn send_transaction(&mut self, data: D) -> BaseResult<()> {
         let mut core = self.core.write().unwrap();
-        // Vec::push() panics when number of elements overflows `usize`
-        if core.tx_pool.len() == std::usize::MAX {
-            return Err(AtMaxVecCapacity);
-        }
-        core.tx_pool.push(data);
-        Ok(())
+        core.add_transaction(data)
     }
 }
 
@@ -404,12 +343,7 @@ where
     // send internal transaction
     fn send_internal_transaction(&mut self, tx: InternalTransaction<P>) -> Result<()> {
         let mut core = self.core.write().unwrap();
-        // Vec::push() panics when number of elements overflows `usize`
-        if core.internal_tx_pool.len() == std::usize::MAX {
-            return Err(Error::Base(AtMaxVecCapacity));
-        }
-        core.internal_tx_pool.push(tx);
-        Ok(())
+        core.add_internal_transaction(tx)
     }
 }
 
@@ -439,18 +373,6 @@ where
     }
 }
 
-impl<P, Data> DAGcore<P, Data>
-where
-    P: PeerId,
-    Data: DataType,
-{
-    fn update_lamport_time(&mut self, time: LamportTime) {
-        if self.lamport_time < time {
-            self.lamport_time = time;
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     #[test]
@@ -460,6 +382,7 @@ mod tests {
 }
 
 mod conf;
+mod core;
 mod errors;
 mod event;
 mod flag_table;
