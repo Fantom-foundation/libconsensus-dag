@@ -112,7 +112,7 @@ where
                 };
 
                 events.push(event);
-                height = height + 1;
+                height += 1;
             }
         }
         Ok(events)

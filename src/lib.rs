@@ -45,8 +45,8 @@ where
     //    conf: Arc<Mutex<DAGconfig<P, T>>>,
     core: Arc<RwLock<DAGcore<P, T>>>,
     listener_handle: Option<JoinHandle<()>>,
-    procA_handle: Option<JoinHandle<()>>,
-    procB_handle: Option<JoinHandle<()>>,
+    proc_a_handle: Option<JoinHandle<()>>,
+    proc_b_handle: Option<JoinHandle<()>>,
 
     //    tx_pool: Vec<T>,
     //    internal_tx_pool: Vec<InternalTransaction<P>>,
@@ -305,11 +305,11 @@ where
         let core_b = core.clone();
         let proc_b_handle = thread::spawn(|| procedure_b(core_b));
         return Ok(DAG {
-            core: core,
+            core,
             quit_tx: tx,
             listener_handle: Some(handle),
-            procA_handle: Some(proc_a_handle),
-            procB_handle: Some(proc_b_handle),
+            proc_a_handle: Some(proc_a_handle),
+            proc_b_handle: Some(proc_b_handle),
         });
     }
 
