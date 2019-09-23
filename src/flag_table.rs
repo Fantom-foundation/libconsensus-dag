@@ -2,10 +2,10 @@ use libcommon_rs::data::DataType;
 use log::{error, warn};
 
 use crate::errors::Error;
-use crate::event_hash::EventHash;
 use crate::peer::Frame;
 use crate::store::DAGstore;
 use libcommon_rs::peer::PeerId;
+use libhash_sha3::Hash as EventHash;
 use std::collections::HashMap;
 use std::option::NoneError;
 

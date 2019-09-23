@@ -465,7 +465,6 @@ mod tests {
 mod conf;
 mod errors;
 mod event;
-mod event_hash;
 mod flag_table;
 mod lamport_time;
 mod peer;

@@ -211,11 +211,15 @@ impl<P> DAGPeerList<P>
 where
     P: PeerId,
 {
+    fn peers_mut(&mut self) -> &mut Vec<DAGPeer<P>> {
+        &mut self.peers
+    }
     fn sort_peers(&mut self) {
-        self.peers.sort_by(|a, b| {
+        let creator = self.creator.clone();
+        self.peers_mut().sort_by(|a, b| {
             use std::cmp::Ordering;
-            let a_cmp = a.id == self.creator;
-            let b_cmp = b.id == self.creator;
+            let a_cmp = a.id == creator;
+            let b_cmp = b.id == creator;
             if a_cmp {
                 if b_cmp {
                     Ordering::Equal

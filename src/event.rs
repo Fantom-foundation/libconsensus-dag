@@ -1,4 +1,3 @@
-use crate::event_hash::EventHash;
 use crate::flag_table::FlagTable;
 use crate::lamport_time::LamportTime;
 use crate::peer::Frame;
@@ -7,6 +6,7 @@ use crate::transactions::InternalTransaction;
 use libcommon_rs::data::DataType;
 use libcommon_rs::peer::PeerId;
 use libcommon_rs::Stub;
+use libhash_sha3::Hash as EventHash;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

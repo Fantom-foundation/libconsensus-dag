@@ -2,11 +2,11 @@
 
 use crate::errors::Result;
 use crate::event::Event;
-use crate::event_hash::EventHash;
 use crate::flag_table::FlagTable;
 use crate::peer::GossipList;
 use crate::peer::Height;
 use libcommon_rs::peer::PeerId;
+use libhash_sha3::Hash as EventHash;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 

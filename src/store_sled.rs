@@ -1,12 +1,12 @@
 extern crate sled;
 
 use crate::event::Event;
-use crate::event_hash::EventHash;
 use crate::peer::GossipList;
 use crate::peer::Height;
 use crate::store::*;
 use bincode::{deserialize, serialize};
 use libcommon_rs::data::DataType;
+use libhash_sha3::Hash as EventHash;
 use std::option::NoneError;
 //use log::warn;
 use crate::errors::{Error, Result};
