@@ -3,8 +3,6 @@
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 #[macro_use]
-extern crate crossbeam_channel;
-#[macro_use]
 extern crate log;
 extern crate libconsensus;
 use crate::conf::DAGconfig;
@@ -17,7 +15,6 @@ use crate::store::DAGstore;
 use crate::store_sled::SledStore;
 use crate::sync::{SyncReply, SyncReq};
 use crate::transactions::InternalTransaction;
-use crossbeam_channel::tick;
 use futures::executor::block_on;
 use futures::stream::Stream;
 use futures::stream::StreamExt;
@@ -112,9 +109,9 @@ where
     P: PeerId + 'static,
 {
     let config = { core.read().unwrap().conf.clone() };
-    let ticker = {
+    let mut ticker = {
         let cfg = config.read().unwrap();
-        tick(Duration::from_millis(cfg.heartbeat))
+        async_timer::Interval::platform_new(Duration::from_millis(cfg.heartbeat))
     };
     let (transport_type, reply_bind_address) = {
         let cfg = config.read().unwrap();
@@ -201,9 +198,9 @@ where
         }
 
         // wait until hearbeat interval expires
-        select! {
-            recv(ticker) -> _ => {},
-        }
+        block_on(async {
+            ticker.as_mut().await;
+        });
     }
 }
 

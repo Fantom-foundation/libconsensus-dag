@@ -6,7 +6,8 @@ edition = "2018"
 
 [dependencies]
 bincode = "1.0.1"
-crossbeam-channel = "0.3"
+#crossbeam-channel = "0.3"
+async-timer = "0.6.0"
 jemallocator = "0.1"
 log = "*"
 os_pipe = "0.8.0"
