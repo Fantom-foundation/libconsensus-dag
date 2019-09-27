@@ -22,4 +22,5 @@ libtransport-tcp = { git = "https://github.com/Fantom-foundation/libtransport-tc
 libcommon-rs = { git = "https://github.com/Fantom-foundation/libcommon-rs" }
 futures-preview = { version = "=0.3.0-alpha.17", features = ["compat"] }
 libhash-sha3 = { git = "https://github.com/Fantom-foundation/libhash-sha3" }
+libsignature = { git = "https://github.com/Fantom-foundation/libsignature" }
 

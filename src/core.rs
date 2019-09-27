@@ -9,15 +9,17 @@ use libcommon_rs::data::DataType;
 use libcommon_rs::peer::PeerId;
 use libconsensus::errors::Error::AtMaxVecCapacity;
 use libconsensus::errors::Result as BaseResult;
+use libsignature::SecretKey;
 use std::sync::Arc;
 use std::sync::RwLock;
 
-pub(crate) struct DAGcore<P, Data>
+pub(crate) struct DAGcore<P, Data, SK>
 where
     Data: DataType,
     P: PeerId,
+    SK: SecretKey,
 {
-    pub(crate) conf: Arc<RwLock<DAGconfig<P, Data>>>,
+    pub(crate) conf: Arc<RwLock<DAGconfig<P, Data, SK>>>,
     pub(crate) store: Arc<RwLock<dyn DAGstore<Data, P>>>,
     tx_pool: Vec<Data>,
     internal_tx_pool: Vec<InternalTransaction<P>>,
@@ -28,12 +30,13 @@ where
     //    sync_reply_transport: Box<dyn Transport<P, SyncReply<P>, Error, DAGPeerList<P>> + 'a>,
 }
 
-impl<P, Data> DAGcore<P, Data>
+impl<P, Data, SK> DAGcore<P, Data, SK>
 where
     P: PeerId,
     Data: DataType,
+    SK: SecretKey,
 {
-    pub(crate) fn new(conf: DAGconfig<P, Data>) -> DAGcore<P, Data> {
+    pub(crate) fn new(conf: DAGconfig<P, Data, SK>) -> DAGcore<P, Data, SK> {
         let store_type = conf.store_type.clone();
         let store = {
             match store_type {
