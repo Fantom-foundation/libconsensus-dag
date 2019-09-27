@@ -5,14 +5,16 @@ use crate::store::StoreType;
 use futures::task::Waker;
 use libcommon_rs::peer::{PeerId, PeerList};
 use libconsensus::ConsensusConfiguration;
+use libsignature::PublicKey;
 use libsignature::SecretKey;
 use libtransport::TransportType;
 use std::marker::PhantomData;
 
-pub struct DAGconfig<P, Data, SK>
+pub struct DAGconfig<P, Data, SK, PK>
 where
     P: PeerId,
     SK: SecretKey,
+    PK: PublicKey,
 {
     pub(crate) request_addr: String,
     pub(crate) reply_addr: String,
@@ -22,16 +24,17 @@ where
     // heartbeat duration in milliseconds
     pub(crate) heartbeat: u64,
     pub(crate) waker: Option<Waker>,
-    pub(crate) peers: DAGPeerList<P>,
+    pub(crate) peers: DAGPeerList<P, PK>,
     pub(crate) creator: P,
     pub(crate) secret_key: SK,
     phantom: PhantomData<Data>,
 }
 
-impl<P, Data, SK> DAGconfig<P, Data, SK>
+impl<P, Data, SK, PK> DAGconfig<P, Data, SK, PK>
 where
     P: PeerId,
     SK: SecretKey,
+    PK: PublicKey,
 {
     pub fn set_heartbeat(&mut self, heartbeat: u64) {
         self.heartbeat = heartbeat;
@@ -53,10 +56,11 @@ where
     }
 }
 
-impl<P, Data, SK> ConsensusConfiguration<Data> for DAGconfig<P, Data, SK>
+impl<P, Data, SK, PK> ConsensusConfiguration<Data> for DAGconfig<P, Data, SK, PK>
 where
     P: PeerId,
     SK: SecretKey,
+    PK: PublicKey,
 {
     fn new() -> Self {
         return DAGconfig {

@@ -9,20 +9,22 @@ use libcommon_rs::data::DataType;
 use libcommon_rs::peer::PeerId;
 use libconsensus::errors::Error::AtMaxVecCapacity;
 use libconsensus::errors::Result as BaseResult;
+use libsignature::PublicKey;
 use libsignature::SecretKey;
 use std::sync::Arc;
 use std::sync::RwLock;
 
-pub(crate) struct DAGcore<P, Data, SK>
+pub(crate) struct DAGcore<P, Data, SK, PK>
 where
     Data: DataType,
     P: PeerId,
     SK: SecretKey,
+    PK: PublicKey,
 {
-    pub(crate) conf: Arc<RwLock<DAGconfig<P, Data, SK>>>,
-    pub(crate) store: Arc<RwLock<dyn DAGstore<Data, P>>>,
+    pub(crate) conf: Arc<RwLock<DAGconfig<P, Data, SK, PK>>>,
+    pub(crate) store: Arc<RwLock<dyn DAGstore<Data, P, PK>>>,
     tx_pool: Vec<Data>,
-    internal_tx_pool: Vec<InternalTransaction<P>>,
+    internal_tx_pool: Vec<InternalTransaction<P, PK>>,
     lamport_time: LamportTime,
     current_frame: Frame,
     last_finalised_frame: Option<Frame>,
@@ -30,20 +32,21 @@ where
     //    sync_reply_transport: Box<dyn Transport<P, SyncReply<P>, Error, DAGPeerList<P>> + 'a>,
 }
 
-impl<P, Data, SK> DAGcore<P, Data, SK>
+impl<P, Data, SK, PK> DAGcore<P, Data, SK, PK>
 where
     P: PeerId,
     Data: DataType,
     SK: SecretKey,
+    PK: PublicKey,
 {
-    pub(crate) fn new(conf: DAGconfig<P, Data, SK>) -> DAGcore<P, Data, SK> {
+    pub(crate) fn new(conf: DAGconfig<P, Data, SK, PK>) -> DAGcore<P, Data, SK, PK> {
         let store_type = conf.store_type.clone();
         let store = {
             match store_type {
                 crate::store::StoreType::Unknown => panic!("unknown DAG store"),
                 crate::store::StoreType::Sled => {
                     // FIXME: we should use a configurable parameter for store location instead of "./sled_store"
-                    <SledStore as DAGstore<Data, P>>::new("./sled_store").unwrap()
+                    <SledStore as DAGstore<Data, P, PK>>::new("./sled_store").unwrap()
                 }
             }
         };
@@ -68,7 +71,10 @@ where
         self.tx_pool.push(data);
         Ok(())
     }
-    pub(crate) fn add_internal_transaction(&mut self, tx: InternalTransaction<P>) -> Result<()> {
+    pub(crate) fn add_internal_transaction(
+        &mut self,
+        tx: InternalTransaction<P, PK>,
+    ) -> Result<()> {
         // Vec::push() panics when number of elements overflows `usize`
         if self.internal_tx_pool.len() == std::usize::MAX {
             return Err(Error::Base(AtMaxVecCapacity));

@@ -4,6 +4,7 @@ use core::slice::{Iter, IterMut};
 use libcommon_rs::peer::{Peer, PeerId, PeerList};
 use libconsensus::errors::Error::AtMaxVecCapacity;
 use libconsensus::BaseConsensusPeer;
+use libsignature::PublicKey;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
@@ -25,8 +26,10 @@ pub(crate) type SuspectList<P> = HashMap<P, LamportTime>;
 
 // Peer attributes
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct DAGPeer<P> {
+pub struct DAGPeer<P, PK> {
     #[serde(rename = "PubKeyHex")]
+    pub pub_key: PK,
+    #[serde(rename = "ID")]
     pub(crate) id: P,
     #[serde(rename = "NetAddr")]
     pub(crate) request_addr: String,
@@ -38,15 +41,17 @@ pub struct DAGPeer<P> {
     lamport_time: LamportTime,
 }
 
-impl<P> From<BaseConsensusPeer<P>> for DAGPeer<P>
+impl<P, PK> From<BaseConsensusPeer<P, PK>> for DAGPeer<P, PK>
 where
     P: PeerId,
+    PK: PublicKey,
 {
-    fn from(bp: BaseConsensusPeer<P>) -> DAGPeer<P> {
+    fn from(bp: BaseConsensusPeer<P, PK>) -> DAGPeer<P, PK> {
         let mut socket: SocketAddr = bp.net_addr.clone().parse().unwrap();
         let port = socket.port();
         socket.set_port(port + 1);
         DAGPeer {
+            pub_key: bp.pub_key,
             id: bp.id,
             request_addr: bp.net_addr,
             reply_addr: socket.to_string(),
@@ -56,15 +61,17 @@ where
     }
 }
 
-impl<P> Peer<P, Error> for DAGPeer<P>
+impl<P, PK> Peer<P, Error> for DAGPeer<P, PK>
 where
     P: PeerId,
+    PK: PublicKey,
 {
     fn new(id: P, net_addr: String) -> Self {
         let mut socket: SocketAddr = net_addr.clone().parse().unwrap();
         let port = socket.port();
         socket.set_port(port + 1);
         DAGPeer {
+            pub_key: PK::default(),
             id,
             request_addr: net_addr,
             reply_addr: socket.to_string(),
@@ -101,10 +108,17 @@ where
     }
 }
 
-impl<P> DAGPeer<P>
+impl<P, PK> DAGPeer<P, PK>
 where
     P: PeerId,
+    PK: PublicKey,
 {
+    pub(crate) fn get_public_key(&self) -> PK {
+        self.pub_key.clone()
+    }
+    pub(crate) fn set_public_key(&mut self, key: PK) {
+        self.pub_key = key;
+    }
     pub(crate) fn update_lamport_time(&mut self, time: LamportTime) {
         if self.lamport_time < time {
             self.lamport_time = time;
@@ -120,11 +134,12 @@ where
     }
 }
 
-pub(crate) struct DAGPeerList<P>
+pub(crate) struct DAGPeerList<P, PK>
 where
     P: PeerId,
+    PK: PublicKey,
 {
-    peers: Vec<DAGPeer<P>>,
+    peers: Vec<DAGPeer<P, PK>>,
     // number of peers; the size of the peer list
     n: usize,
     // round robin number
@@ -133,11 +148,12 @@ where
     creator: P,
 }
 
-impl<P> Default for DAGPeerList<P>
+impl<P, PK> Default for DAGPeerList<P, PK>
 where
     P: PeerId,
+    PK: PublicKey,
 {
-    fn default() -> DAGPeerList<P> {
+    fn default() -> DAGPeerList<P, PK> {
         DAGPeerList {
             peers: Vec::with_capacity(5),
             n: 0,
@@ -147,30 +163,33 @@ where
     }
 }
 
-impl<P> Index<usize> for DAGPeerList<P>
+impl<P, PK> Index<usize> for DAGPeerList<P, PK>
 where
     P: PeerId,
+    PK: PublicKey,
 {
-    type Output = DAGPeer<P>;
+    type Output = DAGPeer<P, PK>;
     fn index(&self, index: usize) -> &Self::Output {
         &self.peers[index]
     }
 }
 
-impl<P> IndexMut<usize> for DAGPeerList<P>
+impl<P, PK> IndexMut<usize> for DAGPeerList<P, PK>
 where
     P: PeerId,
+    PK: PublicKey,
 {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.peers[index]
     }
 }
 
-impl<Pid> PeerList<Pid, Error> for DAGPeerList<Pid>
+impl<Pid, PK> PeerList<Pid, Error> for DAGPeerList<Pid, PK>
 where
     Pid: PeerId,
+    PK: PublicKey,
 {
-    type P = DAGPeer<Pid>;
+    type P = DAGPeer<Pid, PK>;
     fn new() -> Self {
         DAGPeerList {
             peers: Vec::with_capacity(5),
@@ -183,13 +202,13 @@ where
         let mut file = File::open(json_peer_path)?;
         let mut data = String::new();
         file.read_to_string(&mut data)?;
-        let mut v: Vec<DAGPeer<Pid>> = serde_json::from_str(&data)?;
+        let mut v: Vec<DAGPeer<Pid, PK>> = serde_json::from_str(&data)?;
         self.peers.append(&mut v);
         self.sort_peers();
         Ok(())
     }
 
-    fn add(&mut self, p: DAGPeer<Pid>) -> Result<()> {
+    fn add(&mut self, p: DAGPeer<Pid, PK>) -> Result<()> {
         if self.peers.len() == std::usize::MAX {
             return Err(Error::Base(AtMaxVecCapacity));
         }
@@ -207,11 +226,12 @@ where
     }
 }
 
-impl<P> DAGPeerList<P>
+impl<P, PK> DAGPeerList<P, PK>
 where
     P: PeerId,
+    PK: PublicKey,
 {
-    fn peers_mut(&mut self) -> &mut Vec<DAGPeer<P>> {
+    fn peers_mut(&mut self) -> &mut Vec<DAGPeer<P, PK>> {
         &mut self.peers
     }
     fn sort_peers(&mut self) {
@@ -239,7 +259,7 @@ where
         self.creator = creator;
         self.sort_peers();
     }
-    pub fn next_peer(&mut self) -> DAGPeer<P> {
+    pub fn next_peer(&mut self) -> DAGPeer<P, PK> {
         // we assume the very first peer in the vector is one
         // cotrresponding to the current node, so the value of `current`
         // is always 0 and omitted here.
@@ -267,7 +287,7 @@ where
     }
 
     // Find a peer for read only operations
-    pub fn find_peer(&self, id: P) -> Result<DAGPeer<P>> {
+    pub fn find_peer(&self, id: P) -> Result<DAGPeer<P, PK>> {
         let p_ref = self.peers.iter().find(|&x| x.id == id)?;
         Ok(p_ref.clone())
     }
@@ -277,7 +297,7 @@ where
         &mut self,
         id: P,
         time: LamportTime,
-    ) -> Result<DAGPeer<P>> {
+    ) -> Result<DAGPeer<P, PK>> {
         let mut p_ref = self.peers.iter_mut().find(|x| x.id == id)?;
         if p_ref.lamport_time < time {
             p_ref.lamport_time = time;
@@ -286,7 +306,7 @@ where
     }
 
     // Find a peer for read/write operations
-    pub fn find_peer_mut(&mut self, id: P) -> Result<&mut DAGPeer<P>> {
+    pub fn find_peer_mut(&mut self, id: P) -> Result<&mut DAGPeer<P, PK>> {
         let mut p_ref = self.peers.iter_mut().find(|x| x.id == id)?;
         Ok(p_ref)
     }

@@ -7,17 +7,18 @@ use libcommon_rs::data::DataType;
 use libcommon_rs::peer::PeerId;
 use libcommon_rs::Stub;
 use libhash_sha3::Hash as EventHash;
+use libsignature::PublicKey;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub(crate) struct Event<Data, P> {
+pub(crate) struct Event<Data, P, PK> {
     pub(crate) creator: P,
     pub(crate) height: Height,
     self_parent: EventHash,
     other_parent: EventHash,
     lamport_timestamp: LamportTime,
     transactions: Vec<Data>,
-    internal_transactions: Vec<InternalTransaction<P>>,
+    internal_transactions: Vec<InternalTransaction<P, PK>>,
     #[serde(skip, default)]
     pub(crate) hash: EventHash,
     #[serde(skip, default)]
@@ -26,17 +27,19 @@ pub(crate) struct Event<Data, P> {
     ft: FlagTable,
 }
 
-impl<Data, P> Stub for Event<Data, P>
+impl<Data, P, PK> Stub for Event<Data, P, PK>
 where
     Data: DataType,
     P: PeerId,
+    PK: PublicKey,
 {
 }
 
-impl<Data, P> Event<Data, P>
+impl<Data, P, PK> Event<Data, P, PK>
 where
     Data: DataType,
     P: PeerId,
+    PK: PublicKey,
 {
     pub(crate) fn new(
         creator: P,
@@ -44,7 +47,7 @@ where
         other_parent: EventHash,
         lamport_timestamp: LamportTime,
         transactions: Vec<Data>,
-        internal_transactions: Vec<InternalTransaction<P>>,
+        internal_transactions: Vec<InternalTransaction<P, PK>>,
     ) -> Self {
         let mut event = Event {
             creator,

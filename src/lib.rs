@@ -21,7 +21,7 @@ use libcommon_rs::data::DataType;
 use libcommon_rs::peer::PeerId;
 use libconsensus::errors::Result as BaseResult;
 use libconsensus::Consensus;
-use libsignature::SecretKey;
+use libsignature::{PublicKey, SecretKey};
 use libtransport::Transport;
 use libtransport::TransportReceiver;
 use libtransport::TransportSender;
@@ -38,14 +38,15 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 // DAG node structure
-pub struct DAG<P, T, SK>
+pub struct DAG<P, T, SK, PK>
 where
     T: DataType,
     P: PeerId,
     SK: SecretKey,
+    PK: PublicKey,
 {
     //    conf: Arc<Mutex<DAGconfig<P, T>>>,
-    core: Arc<RwLock<DAGcore<P, T, SK>>>,
+    core: Arc<RwLock<DAGcore<P, T, SK, PK>>>,
     listener_handle: Option<JoinHandle<()>>,
     proc_a_handle: Option<JoinHandle<()>>,
     proc_b_handle: Option<JoinHandle<()>>,
@@ -60,11 +61,14 @@ where
     //    sync_reply_transport: Box<dyn Transport<P, SyncReply<P>, Error, DAGPeerList<P>> + 'a>,
 }
 
-fn listener<P, Data: 'static, SK>(core: Arc<RwLock<DAGcore<P, Data, SK>>>, quit_rx: Receiver<()>)
-where
+fn listener<P, Data: 'static, SK, PK>(
+    core: Arc<RwLock<DAGcore<P, Data, SK, PK>>>,
+    quit_rx: Receiver<()>,
+) where
     Data: DataType,
     P: PeerId,
     SK: SecretKey,
+    PK: PublicKey,
 {
     let config = { core.read().unwrap().conf.clone() };
     // FIXME: what we do with unwrap() in threads?
@@ -86,11 +90,12 @@ where
 }
 
 // Procedure A of DAG consensus
-fn procedure_a<P, D, SK>(core: Arc<RwLock<DAGcore<P, D, SK>>>)
+fn procedure_a<P, D, SK, PK>(core: Arc<RwLock<DAGcore<P, D, SK, PK>>>)
 where
     D: DataType + 'static,
     P: PeerId + 'static,
     SK: SecretKey,
+    PK: PublicKey + 'static,
 {
     let config = { core.read().unwrap().conf.clone() };
     let mut ticker = {
@@ -105,7 +110,7 @@ where
     let mut sync_req_sender = {
         match transport_type {
             libtransport::TransportType::TCP => {
-                TCPsender::<P, SyncReq<P>, errors::Error, peer::DAGPeerList<P>>::new().unwrap()
+                TCPsender::<P, SyncReq<P>, errors::Error, peer::DAGPeerList<P, PK>>::new().unwrap()
             }
             libtransport::TransportType::Unknown => panic!("unknown transport"),
         }
@@ -113,8 +118,10 @@ where
     let mut sync_reply_receiver = {
         match transport_type {
             libtransport::TransportType::TCP => {
-                TCPreceiver::<P, SyncReply<D, P>, Error, DAGPeerList<P>>::new(reply_bind_address)
-                    .unwrap()
+                TCPreceiver::<P, SyncReply<D, P, PK>, Error, DAGPeerList<P, PK>>::new(
+                    reply_bind_address,
+                )
+                .unwrap()
             }
             libtransport::TransportType::Unknown => panic!("unknown transport"),
         }
@@ -189,11 +196,12 @@ where
 }
 
 // Procedure B of DAG consensus
-fn procedure_b<P, D, SK>(core: Arc<RwLock<DAGcore<P, D, SK>>>)
+fn procedure_b<P, D, SK, PK>(core: Arc<RwLock<DAGcore<P, D, SK, PK>>>)
 where
     D: DataType + 'static,
     P: PeerId + 'static,
     SK: SecretKey,
+    PK: PublicKey + 'static,
 {
     let config = { core.read().unwrap().conf.clone() };
     let (transport_type, request_bind_address) = {
@@ -203,7 +211,7 @@ where
     let mut sync_req_receiver = {
         match transport_type {
             libtransport::TransportType::TCP => {
-                TCPreceiver::<P, SyncReq<P>, Error, DAGPeerList<P>>::new(request_bind_address)
+                TCPreceiver::<P, SyncReq<P>, Error, DAGPeerList<P, PK>>::new(request_bind_address)
                     .unwrap()
             }
             libtransport::TransportType::Unknown => panic!("unknown transport"),
@@ -212,7 +220,7 @@ where
     let mut sync_reply_sender = {
         match transport_type {
             libtransport::TransportType::TCP => {
-                TCPsender::<P, SyncReply<D, P>, Error, DAGPeerList<P>>::new().unwrap()
+                TCPsender::<P, SyncReply<D, P, PK>, Error, DAGPeerList<P, PK>>::new().unwrap()
             }
             libtransport::TransportType::Unknown => panic!("unknown transport"),
         }
@@ -234,7 +242,7 @@ where
                 Err(e) => error!("Procedure B: get_events_for_gossip() error: {:?}", e),
                 Ok(events) => {
                     let gossip_list: GossipList<P> = config.read().unwrap().peers.get_gossip_list();
-                    let reply = SyncReply::<D, P> {
+                    let reply = SyncReply::<D, P, PK> {
                         from: sync_req.to,
                         to: sync_req.from,
                         gossip_list,
@@ -267,15 +275,16 @@ where
     });
 }
 
-impl<P, D, SK> Consensus<'_, D> for DAG<P, D, SK>
+impl<P, D, SK, PK> Consensus<'_, D> for DAG<P, D, SK, PK>
 where
     P: PeerId + 'static,
     D: DataType + 'static,
     SK: SecretKey + 'static,
+    PK: PublicKey + 'static,
 {
-    type Configuration = DAGconfig<P, D, SK>;
+    type Configuration = DAGconfig<P, D, SK, PK>;
 
-    fn new(mut cfg: DAGconfig<P, D, SK>) -> BaseResult<DAG<P, D, SK>> {
+    fn new(mut cfg: DAGconfig<P, D, SK, PK>) -> BaseResult<DAG<P, D, SK, PK>> {
         let (tx, rx) = mpsc::channel();
         //cfg.set_quit_rx(rx);
         let bind_addr = cfg.request_addr.clone();
@@ -284,7 +293,7 @@ where
         let mut sr_transport = {
             match transport_type {
                 libtransport::TransportType::TCP => {
-                    TCPtransport::<P, SyncReq<P>, Error, DAGPeerList<P>>::new(bind_addr)?
+                    TCPtransport::<P, SyncReq<P>, Error, DAGPeerList<P, PK>>::new(bind_addr)?
                 }
                 libtransport::TransportType::Unknown => panic!("unknown transport"),
             }
@@ -292,7 +301,9 @@ where
         let mut sp_transport = {
             match transport_type {
                 libtransport::TransportType::TCP => {
-                    TCPtransport::<P, SyncReply<D, P>, Error, DAGPeerList<P>>::new(reply_addr)?
+                    TCPtransport::<P, SyncReply<D, P, PK>, Error, DAGPeerList<P, PK>>::new(
+                        reply_addr,
+                    )?
                 }
                 libtransport::TransportType::Unknown => panic!("unknown transport"),
             }
@@ -331,43 +342,47 @@ where
     }
 }
 
-impl<P, D, SK> Drop for DAG<P, D, SK>
+impl<P, D, SK, PK> Drop for DAG<P, D, SK, PK>
 where
     D: DataType,
     P: PeerId,
     SK: SecretKey,
+    PK: PublicKey,
 {
     fn drop(&mut self) {
         self.quit_tx.send(()).unwrap();
     }
 }
 
-impl<P, D, SK> DAG<P, D, SK>
+impl<P, D, SK, PK> DAG<P, D, SK, PK>
 where
     D: DataType,
     P: PeerId,
     SK: SecretKey,
+    PK: PublicKey,
 {
     // send internal transaction
-    fn send_internal_transaction(&mut self, tx: InternalTransaction<P>) -> Result<()> {
+    fn send_internal_transaction(&mut self, tx: InternalTransaction<P, PK>) -> Result<()> {
         let mut core = self.core.write().unwrap();
         core.add_internal_transaction(tx)
     }
 }
 
-impl<P, D, SK> Unpin for DAG<P, D, SK>
+impl<P, D, SK, PK> Unpin for DAG<P, D, SK, PK>
 where
     D: DataType,
     P: PeerId,
     SK: SecretKey,
+    PK: PublicKey,
 {
 }
 
-impl<P, Data, SK> Stream for DAG<P, Data, SK>
+impl<P, Data, SK, PK> Stream for DAG<P, Data, SK, PK>
 where
     P: PeerId,
     Data: DataType,
     SK: SecretKey,
+    PK: PublicKey,
 {
     type Item = Data;
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {

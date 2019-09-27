@@ -4,6 +4,7 @@ use crate::peer::GossipList;
 use core::hash::Hash;
 use libcommon_rs::peer::PeerId;
 use libcommon_rs::Stub;
+use libsignature::PublicKey;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
@@ -20,17 +21,18 @@ impl<P> Stub for SyncReq<P> where P: PeerId {}
 
 // Sync Reply
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SyncReply<Data, P: Hash + Eq> {
+pub struct SyncReply<Data, P: Hash + Eq, PK> {
     pub(crate) from: P,
     pub(crate) to: P,
     pub(crate) gossip_list: GossipList<P>,
     pub(crate) lamport_time: LamportTime,
-    pub(crate) events: Vec<Event<Data, P>>,
+    pub(crate) events: Vec<Event<Data, P, PK>>,
 }
 
-impl<Data, P> Stub for SyncReply<Data, P>
+impl<Data, P, PK> Stub for SyncReply<Data, P, PK>
 where
     Data: Serialize + DeserializeOwned + Send + Clone,
     P: PeerId,
+    PK: PublicKey,
 {
 }
