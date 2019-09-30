@@ -1,5 +1,6 @@
 use crate::conf::DAGconfig;
 use crate::errors::{Error, Result};
+use crate::event::Event;
 use crate::lamport_time::LamportTime;
 use crate::peer::Frame;
 use crate::store::DAGstore;
@@ -86,5 +87,11 @@ where
         if self.lamport_time < time {
             self.lamport_time = time;
         }
+    }
+    pub(crate) fn check_event(&self, event: &Event<Data, P, PK>) -> Result<bool> {
+        Ok(true)
+    }
+    pub(crate) fn insert_event(&mut self, event: Event<Data, P, PK>) -> Result<bool> {
+        Ok(true)
     }
 }

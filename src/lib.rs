@@ -144,6 +144,7 @@ where
             gossip_list,
             lamport_time: { core.read().unwrap().get_lamport_time() },
         };
+        drop(cfg);
         match sync_req_sender.send(peer.request_addr, request) {
             Ok(()) => {}
             Err(e) => error!("error sending sync request: {:?}", e),
@@ -165,18 +166,26 @@ where
                         .update_lamport_time(sync_reply.lamport_time);
                 }
                 // process unknown events
-                for event in sync_reply.events.iter() {
+                for event in sync_reply.events.into_iter() {
                     {
+                        // check if event is valid
+                        if !core.read().unwrap().check_event(&event).unwrap() {
+                            error!("Event {:?} is not valid", event);
+                            continue;
+                        }
+                        let lamport_time = event.get_lamport_time();
+                        let height = event.get_height();
+                        let creator = event.get_creator();
+                        // insert event into node DB
+                        core.write().unwrap().insert_event(event).unwrap();
+                        // update lamport time and height of the event creator's peer
                         config
                             .write()
                             .unwrap()
                             .peers
-                            .find_peer_mut(event.get_creator())
+                            .find_peer_mut(creator)
                             .unwrap()
-                            .update_lamport_time_and_height(
-                                event.get_lamport_time(),
-                                event.get_height(),
-                            );
+                            .update_lamport_time_and_height(lamport_time, height);
                     }
                 }
             }
