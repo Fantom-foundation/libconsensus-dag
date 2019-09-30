@@ -212,7 +212,7 @@ where
         if self.peers.len() == std::usize::MAX {
             return Err(Error::Base(AtMaxVecCapacity));
         }
-        self.peers.push(p.into());
+        self.peers.push(p);
         self.n = self.peers.len();
         self.r = self.n >> 1;
         self.sort_peers();
@@ -278,8 +278,8 @@ where
             g.insert(
                 p.id.clone(),
                 Gossip {
-                    lamport_time: p.lamport_time.clone(),
-                    height: p.height.clone(),
+                    lamport_time: p.lamport_time,
+                    height: p.height,
                 },
             );
         }
