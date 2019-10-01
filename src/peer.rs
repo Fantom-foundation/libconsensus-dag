@@ -269,7 +269,7 @@ where
         } else {
             self.r = self.n >> 1
         }
-        return self.peers[next].clone();
+        self.peers[next].clone()
     }
 
     pub fn get_gossip_list(&self) -> GossipList<P> {

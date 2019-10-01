@@ -1,4 +1,5 @@
 use libconsensus::errors::Error as BaseError;
+use libhash::errors::Error as LibhashError;
 use std::option::NoneError;
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -11,6 +12,14 @@ pub enum Error {
     Io(std::io::Error),
     SerdeJson(serde_json::error::Error),
     NoneError(NoneError),
+    LibHash(LibhashError),
+}
+
+impl From<LibhashError> for Error {
+    #[inline]
+    fn from(e: LibhashError) -> Error {
+        Error::LibHash(e)
+    }
 }
 
 impl From<NoneError> for Error {
@@ -86,6 +95,10 @@ impl PartialEq for Error {
             }
             Error::Base(ref _l) => {
                 // FIXME: implement PartialEq trait for libconsensus::errors::Error
+                false
+            }
+            Error::LibHash(ref l) => {
+                // FIXME: implement PartialEq trait for libhash::errors::Error
                 false
             }
         }

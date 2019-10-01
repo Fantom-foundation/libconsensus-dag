@@ -6,7 +6,7 @@ use libconsensus::TransactionType;
 use libsignature::PublicKey;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, Hash)]
 pub(crate) struct InternalTransaction<P, PK> {
     transaction_type: TransactionType,
     peer: BaseConsensusPeer<P, PK>,

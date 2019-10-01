@@ -1,5 +1,6 @@
 use libcommon_rs::data::DataType;
 use libsignature::PublicKey;
+use libsignature::Signature;
 use log::{error, warn};
 
 use crate::errors::Error;
@@ -66,7 +67,13 @@ fn open_merge_flag_table(first: &FlagTable, second: &FlagTable, frame_number: Fr
 // This procedure takes a store and a flag table as input
 // and produces a map which stores creator's hashes of visible roots;
 // for each root it stores minimal frame number.
-fn derive_creator_table<P: PeerId, Data: DataType, PK: PublicKey, S: DAGstore<Data, P, PK>>(
+fn derive_creator_table<
+    P: PeerId,
+    Data: DataType,
+    PK: PublicKey,
+    Sig: Signature,
+    S: DAGstore<Data, P, PK, Sig>,
+>(
     store: &mut S,
     ft: &FlagTable,
 ) -> CreatorFlagTable<P> {

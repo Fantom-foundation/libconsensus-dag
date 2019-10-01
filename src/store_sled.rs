@@ -1,13 +1,14 @@
 extern crate sled;
 
 use crate::event::Event;
+use crate::event::NetEvent;
 use crate::peer::GossipList;
 use crate::peer::Height;
 use crate::store::*;
 use bincode::{deserialize, serialize};
 use libcommon_rs::data::DataType;
 use libhash_sha3::Hash as EventHash;
-use libsignature::PublicKey;
+use libsignature::{PublicKey, Signature};
 use std::option::NoneError;
 //use log::warn;
 use crate::errors::{Error, Result};
@@ -23,11 +24,12 @@ pub(crate) struct SledStore {
     sync: bool,
 }
 
-impl<P, D, PK> DAGstore<D, P, PK> for SledStore
+impl<P, D, PK, Sig> DAGstore<D, P, PK, Sig> for SledStore
 where
     D: DataType,
     P: PeerId,
     PK: PublicKey,
+    Sig: Signature,
 {
     // function new() creates a new Sled based Storage
     fn new(base_path: &str) -> Result<SledStore> {
@@ -49,7 +51,7 @@ where
 
     // function set_event() writes Event into storage; returns True on success and
     // False on failure
-    fn set_event(&mut self, e: Event<D, P, PK>) -> Result<()> {
+    fn set_event(&mut self, e: Event<D, P, PK, Sig>) -> Result<()> {
         let e_bytes = serialize(&e)?;
         // Store serialized event with hash as a key.
         let key = e.hash.clone().to_vec();
@@ -63,10 +65,10 @@ where
         Ok(())
     }
 
-    fn get_event(&mut self, ex: &EventHash) -> Result<Event<D, P, PK>> {
+    fn get_event(&mut self, ex: &EventHash) -> Result<Event<D, P, PK, Sig>> {
         let key = ex.to_vec();
         match self.event.get(&*key)? {
-            Some(x) => Ok(deserialize::<Event<D, P, PK>>(&x)?),
+            Some(x) => Ok(deserialize::<Event<D, P, PK, Sig>>(&x)?),
             None => Err(Error::NoneError(NoneError)),
         }
     }
@@ -89,16 +91,19 @@ where
         }
     }
 
-    fn get_event_of_creator(&self, creator: P, height: Height) -> Result<Event<D, P, PK>> {
+    fn get_event_of_creator(&self, creator: P, height: Height) -> Result<Event<D, P, PK, Sig>> {
         let key = format!("{}-{}", creator, height).into_bytes();
         match self.event.get(&*key)? {
-            Some(x) => Ok(deserialize::<Event<D, P, PK>>(&x)?),
+            Some(x) => Ok(deserialize::<Event<D, P, PK, Sig>>(&x)?),
             None => Err(Error::NoneError(NoneError)),
         }
     }
 
-    fn get_events_for_gossip(&self, gossip: &GossipList<P>) -> Result<Vec<Event<D, P, PK>>> {
-        let mut events: Vec<Event<D, P, PK>> = Vec::with_capacity(1);
+    fn get_events_for_gossip(
+        &self,
+        gossip: &GossipList<P>,
+    ) -> Result<Vec<NetEvent<D, P, PK, Sig>>> {
+        let mut events: Vec<NetEvent<D, P, PK, Sig>> = Vec::with_capacity(1);
         for (peer, gossip) in gossip.iter() {
             let mut height = gossip.height + 1;
             loop {
@@ -113,7 +118,7 @@ where
                     Ok(event) => event,
                 };
 
-                events.push(event);
+                events.push(event.into());
                 height += 1;
             }
         }
