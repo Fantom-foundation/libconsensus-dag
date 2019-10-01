@@ -171,10 +171,10 @@ where
         self.creator.clone()
     }
     pub(crate) fn get_lamport_time(&self) -> LamportTime {
-        self.lamport_timestamp.clone()
+        self.lamport_timestamp
     }
     pub(crate) fn get_height(&self) -> Height {
-        self.height.clone()
+        self.height
     }
     pub(crate) fn event_hash(&mut self) -> Result<EventHash> {
         let ev: HashEvent<Data, P, PK> = (*self).clone().into();

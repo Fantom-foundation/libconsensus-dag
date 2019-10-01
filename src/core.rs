@@ -63,7 +63,7 @@ where
         }
     }
     pub(crate) fn get_lamport_time(&self) -> LamportTime {
-        self.lamport_time.clone()
+        self.lamport_time
     }
     pub(crate) fn add_transaction(&mut self, data: Data) -> BaseResult<()> {
         // Vec::push() panics when number of elements overflows `usize`
