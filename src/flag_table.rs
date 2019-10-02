@@ -9,7 +9,6 @@ use crate::store::DAGstore;
 use libcommon_rs::peer::PeerId;
 use libhash_sha3::Hash as EventHash;
 use std::collections::HashMap;
-use std::option::NoneError;
 
 // FlagTable is a map from EventHash into Frame number
 pub(crate) type FlagTable = HashMap<EventHash, Frame>;
@@ -80,8 +79,16 @@ fn derive_creator_table<
     let mut result = CreatorFlagTable::<P>::new();
     for (key, value) in ft.iter() {
         match store.get_event(key) {
-            Err(Error::NoneError(NoneError)) => warn!("Event {:?} not found", key),
-            Err(e) => error!("Error {:?} encountered while retrieving event {:?}", e, key),
+            Err(e) => match e.downcast::<Error>() {
+                Ok(err) => {
+                    if err == Error::NoneError {
+                        warn!("Event {:?} not found", key)
+                    } else {
+                        error!("Error {:?} encountered while retrieving event {:?}", e, key)
+                    }
+                }
+                Err(_) => error!("Error {:?} encountered while retrieving event {:?}", e, key),
+            },
             Ok(e) => match result.get(&e.creator) {
                 Some(frame) => {
                     if *frame > *value {

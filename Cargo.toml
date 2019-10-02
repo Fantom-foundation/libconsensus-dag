@@ -24,4 +24,4 @@ futures-preview = { version = "=0.3.0-alpha.17", features = ["compat"] }
 libhash = { git = "https://github.com/Fantom-foundation/libhash" }
 libhash-sha3 = { git = "https://github.com/Fantom-foundation/libhash-sha3" }
 libsignature = { git = "https://github.com/Fantom-foundation/libsignature" }
-
+failure = "0.1.5"

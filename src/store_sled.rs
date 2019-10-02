@@ -9,7 +9,6 @@ use bincode::{deserialize, serialize};
 use libcommon_rs::data::DataType;
 use libhash_sha3::Hash as EventHash;
 use libsignature::{PublicKey, Signature};
-use std::option::NoneError;
 //use log::warn;
 use crate::errors::{Error, Result};
 use crate::flag_table::FlagTable;
@@ -69,7 +68,7 @@ where
         let key = ex.to_vec();
         match self.event.get(&*key)? {
             Some(x) => Ok(deserialize::<Event<D, P, PK, Sig>>(&x)?),
-            None => Err(Error::NoneError(NoneError)),
+            None => Err(Error::NoneError.into()),
         }
     }
 
@@ -87,7 +86,7 @@ where
         let key = ex.to_vec();
         match self.flag_table.get(&*key)? {
             Some(x) => Ok(deserialize::<FlagTable>(&x)?),
-            None => Err(Error::NoneError(NoneError)),
+            None => Err(Error::NoneError.into()),
         }
     }
 
@@ -95,7 +94,7 @@ where
         let key = format!("{}-{}", creator, height).into_bytes();
         match self.event.get(&*key)? {
             Some(x) => Ok(deserialize::<Event<D, P, PK, Sig>>(&x)?),
-            None => Err(Error::NoneError(NoneError)),
+            None => Err(Error::NoneError.into()),
         }
     }
 
@@ -108,13 +107,16 @@ where
             let mut height = gossip.height + 1;
             loop {
                 let event = match self.get_event_of_creator(peer.clone(), height.clone()) {
-                    Err(e) => {
-                        if e == Error::NoneError(NoneError) {
-                            break;
-                        } else {
-                            return Err(e);
+                    Err(e) => match e.downcast::<Error>() {
+                        Ok(err) => {
+                            if err == Error::NoneError {
+                                break;
+                            } else {
+                                return Err(e);
+                            }
                         }
-                    }
+                        Err(_) => return Err(e),
+                    },
                     Ok(event) => event,
                 };
 

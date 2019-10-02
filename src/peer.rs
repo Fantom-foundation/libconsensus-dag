@@ -124,6 +124,13 @@ where
             self.lamport_time = time;
         }
     }
+    pub(crate) fn get_next_height(&mut self) -> Height {
+        self.height = self.height + 1;
+        self.height
+    }
+    pub(crate) fn get_height(&self) -> Height {
+        self.height
+    }
     pub(crate) fn update_lamport_time_and_height(&mut self, time: LamportTime, height: Height) {
         if self.lamport_time < time {
             self.lamport_time = time;
@@ -198,7 +205,7 @@ where
             creator: Default::default(),
         }
     }
-    fn get_peers_from_file(&mut self, json_peer_path: String) -> Result<()> {
+    fn get_peers_from_file(&mut self, json_peer_path: String) -> std::result::Result<(), Error> {
         let mut file = File::open(json_peer_path)?;
         let mut data = String::new();
         file.read_to_string(&mut data)?;
@@ -208,7 +215,7 @@ where
         Ok(())
     }
 
-    fn add(&mut self, p: DAGPeer<Pid, PK>) -> Result<()> {
+    fn add(&mut self, p: DAGPeer<Pid, PK>) -> std::result::Result<(), Error> {
         if self.peers.len() == std::usize::MAX {
             return Err(Error::Base(AtMaxVecCapacity));
         }
@@ -288,8 +295,10 @@ where
 
     // Find a peer for read only operations
     pub fn find_peer(&self, id: P) -> Result<DAGPeer<P, PK>> {
-        let p_ref = self.peers.iter().find(|&x| x.id == id)?;
-        Ok(p_ref.clone())
+        match self.peers.iter().find(|&x| x.id == id) {
+            None => Err(Error::NoneError.into()),
+            Some(p_ref) => Ok(p_ref.clone()),
+        }
     }
 
     // Find a peer for read only operations and update its lamport time if needed
@@ -298,16 +307,22 @@ where
         id: P,
         time: LamportTime,
     ) -> Result<DAGPeer<P, PK>> {
-        let mut p_ref = self.peers.iter_mut().find(|x| x.id == id)?;
-        if p_ref.lamport_time < time {
-            p_ref.lamport_time = time;
+        match self.peers.iter_mut().find(|x| x.id == id) {
+            None => Err(Error::NoneError.into()),
+            Some(p_ref) => {
+                if p_ref.lamport_time < time {
+                    p_ref.lamport_time = time;
+                }
+                Ok(p_ref.clone())
+            }
         }
-        Ok(p_ref.clone())
     }
 
     // Find a peer for read/write operations
     pub fn find_peer_mut(&mut self, id: P) -> Result<&mut DAGPeer<P, PK>> {
-        let mut p_ref = self.peers.iter_mut().find(|x| x.id == id)?;
-        Ok(p_ref)
+        match self.peers.iter_mut().find(|x| x.id == id) {
+            None => Err(Error::NoneError.into()),
+            Some(p_ref) => Ok(p_ref),
+        }
     }
 }

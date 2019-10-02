@@ -1,5 +1,5 @@
 use crate::conf::DAGconfig;
-use crate::errors::{Error, Result};
+use crate::errors::Result;
 use crate::event::Event;
 use crate::lamport_time::LamportTime;
 use crate::peer::Frame;
@@ -41,6 +41,9 @@ where
     PK: PublicKey,
     Sig: Signature,
 {
+    /// Defines maximum number of transactions in a single event
+    const TRANSACTIONS_LIMIT: usize = 16000;
+
     pub(crate) fn new(conf: DAGconfig<P, Data, SK, PK>) -> DAGcore<P, Data, SK, PK, Sig> {
         let store_type = conf.store_type.clone();
         let store = {
@@ -65,13 +68,27 @@ where
     pub(crate) fn get_lamport_time(&self) -> LamportTime {
         self.lamport_time
     }
+    pub(crate) fn get_next_lamport_time(&mut self) -> LamportTime {
+        self.lamport_time = self.lamport_time + 1;
+        self.lamport_time
+    }
     pub(crate) fn add_transaction(&mut self, data: Data) -> BaseResult<()> {
         // Vec::push() panics when number of elements overflows `usize`
         if self.tx_pool.len() == std::usize::MAX {
-            return Err(AtMaxVecCapacity);
+            return Err(AtMaxVecCapacity.into());
         }
         self.tx_pool.push(data);
         Ok(())
+    }
+    pub(crate) fn next_transactions(&mut self) -> Vec<Data> {
+        let len = self.tx_pool.len();
+        if len > Self::TRANSACTIONS_LIMIT {
+            len = Self::TRANSACTIONS_LIMIT;
+        }
+        let new_trx = self.tx_pool.split_off(len);
+        let old_trx = self.tx_pool;
+        self.tx_pool = new_trx;
+        old_trx
     }
     pub(crate) fn add_internal_transaction(
         &mut self,
@@ -79,10 +96,20 @@ where
     ) -> Result<()> {
         // Vec::push() panics when number of elements overflows `usize`
         if self.internal_tx_pool.len() == std::usize::MAX {
-            return Err(Error::Base(AtMaxVecCapacity));
+            return Err(AtMaxVecCapacity.into());
         }
         self.internal_tx_pool.push(tx);
         Ok(())
+    }
+    pub(crate) fn next_internal_transactions(&mut self) -> Vec<InternalTransaction<P, PK>> {
+        let len = self.internal_tx_pool.len();
+        if len > Self::TRANSACTIONS_LIMIT {
+            len = Self::TRANSACTIONS_LIMIT;
+        }
+        let new_trx = self.internal_tx_pool.split_off(len);
+        let old_trx = self.internal_tx_pool;
+        self.internal_tx_pool = new_trx;
+        old_trx
     }
     pub(crate) fn update_lamport_time(&mut self, time: LamportTime) {
         if self.lamport_time < time {
@@ -90,6 +117,9 @@ where
         }
     }
     pub(crate) fn check_event(&self, event: &Event<Data, P, PK, Sig>) -> Result<bool> {
+        // FIXME: implement event verification:
+        // - self-parant must be the last known event of the creator with height one minus height of the event
+        // - all signatures must be verified positively
         Ok(true)
     }
     pub(crate) fn insert_event(&mut self, event: Event<Data, P, PK, Sig>) -> Result<bool> {

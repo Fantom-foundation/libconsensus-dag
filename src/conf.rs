@@ -51,6 +51,9 @@ where
     pub fn set_request_addr(&mut self, request_addr: String) {
         self.request_addr = request_addr;
     }
+    pub fn get_creator(&self) -> P {
+        self.creator.clone()
+    }
     pub fn check_quit(&mut self) -> bool {
         self.shutdown
     }

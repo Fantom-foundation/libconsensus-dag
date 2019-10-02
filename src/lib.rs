@@ -3,6 +3,9 @@
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 #[macro_use]
+extern crate failure;
+extern crate serde_derive;
+#[macro_use]
 extern crate log;
 extern crate libconsensus;
 use crate::conf::DAGconfig;
@@ -22,6 +25,7 @@ use libcommon_rs::data::DataType;
 use libcommon_rs::peer::PeerId;
 use libconsensus::errors::Result as BaseResult;
 use libconsensus::Consensus;
+use libhash_sha3::Hash as EventHash;
 use libsignature::Signature;
 use libsignature::{PublicKey, SecretKey};
 use libtransport::Transport;
@@ -31,6 +35,7 @@ use libtransport_tcp::receiver::TCPreceiver;
 use libtransport_tcp::sender::TCPsender;
 use libtransport_tcp::TCPtransport;
 use log::error;
+use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::mpsc::{self, Sender};
 use std::sync::mpsc::{Receiver, TryRecvError};
@@ -203,7 +208,51 @@ where
         // create new event if needed referring remote peer as other-parent
         // FIXME: need to be implemented
         {
-            let mut core_loc = core.write().unwrap();
+            let mut local_core = core.write().unwrap();
+            let creator = local_core.conf.read().unwrap().get_creator();
+            let height = config
+                .read()
+                .unwrap()
+                .peers
+                .find_peer_mut(creator)
+                .unwrap()
+                .get_next_height();
+            let (self_parent_event, other_parent_event) = {
+                let store = local_core.store.read().unwrap();
+                (
+                    store
+                        .get_event_of_creator(
+                            peer.id,
+                            config
+                                .read()
+                                .unwrap()
+                                .peers
+                                .find_peer_mut(peer.id)
+                                .unwrap()
+                                .get_height(),
+                        )
+                        .unwrap(),
+                    store.get_event_of_creator(creator, height - 1).unwrap(),
+                )
+            };
+            let self_parent = self_parent_event.hash;
+            let other_parent = other_parent_event.hash;
+            let lamport_timestamp = local_core.get_next_lamport_time();
+            let transactions = local_core.next_transactions();
+            let internal_transactions = local_core.next_internal_transactions();
+            let event: Event<D, P, PK, Sig> = Event {
+                creator,
+                height,
+                self_parent,
+                other_parent,
+                lamport_timestamp,
+                transactions,
+                internal_transactions,
+                hash: EventHash::default(),
+                signatures: HashMap::new(),
+                frame_number,
+                ft,
+            };
         }
 
         // wait until hearbeat interval expires

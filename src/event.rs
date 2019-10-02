@@ -176,6 +176,9 @@ where
     pub(crate) fn get_height(&self) -> Height {
         self.height
     }
+    pub(crate) fn get_hash(&self) -> EventHash {
+        self.hash
+    }
     pub(crate) fn event_hash(&mut self) -> Result<EventHash> {
         let ev: HashEvent<Data, P, PK> = (*self).clone().into();
         let hash = EventHash::new(&ev)?;

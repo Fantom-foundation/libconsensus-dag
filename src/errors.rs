@@ -1,17 +1,25 @@
+use failure::Error as FailureError;
 use libconsensus::errors::Error as BaseError;
 use libhash::errors::Error as LibhashError;
 use std::option::NoneError;
 
-pub type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, FailureError>;
 
-#[derive(Debug)]
+#[derive(Debug, Fail)]
 pub enum Error {
+    #[fail(display = "Libconsensus Base Error: {:?}", 0)]
     Base(BaseError),
+    #[fail(display = "Bincode Error: {:?}", 0)]
     Bincode(bincode::Error),
+    #[fail(display = "Sled Error: {:?}", 0)]
     Sled(sled::Error),
+    #[fail(display = "Io Error: {:?}", 0)]
     Io(std::io::Error),
+    #[fail(display = "SerdeJson Error: {:?}", 0)]
     SerdeJson(serde_json::error::Error),
-    NoneError(NoneError),
+    #[fail(display = "None an error!")]
+    NoneError,
+    #[fail(display = "Libhash Error: {:?}", 0)]
     LibHash(LibhashError),
 }
 
@@ -25,7 +33,7 @@ impl From<LibhashError> for Error {
 impl From<NoneError> for Error {
     #[inline]
     fn from(none_error: NoneError) -> Error {
-        Error::NoneError(none_error)
+        Error::NoneError
     }
 }
 
@@ -67,9 +75,9 @@ impl From<BaseError> for Error {
 impl PartialEq for Error {
     fn eq(&self, other: &Error) -> bool {
         match *self {
-            Error::NoneError(ref l) => {
-                if let Error::NoneError(r) = other {
-                    l == r
+            Error::NoneError => {
+                if Error::NoneError == *other {
+                    true
                 } else {
                     false
                 }
