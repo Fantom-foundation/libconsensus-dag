@@ -5,22 +5,21 @@ authors = ["Samuel Marks <@SamuelMarks>"]
 edition = "2018"
 
 [dependencies]
-bincode = "1.0.1"
-#crossbeam-channel = "0.3"
+bincode = "1.2.0"
 async-timer = "0.6.0"
-jemallocator = "0.1"
-log = "*"
-os_pipe = "0.8.0"
-serde = "=1.0.99"
-serde_derive = "=1.0.99"
-serde_json = "*"
-sled = "*" 
-to_vec = "*"
+jemallocator = "0.3.2"
+log = "0.4.8"
+os_pipe = "0.8.2"
+serde = "1.0.101"
+serde_derive = "1.0.101"
+serde_json = "1.0.40"
+sled = "0.28.0"
+to_vec = "0.1.0"
 libconsensus = { git = "https://github.com/Fantom-foundation/libconsensus" }
 libtransport = { git = "https://github.com/Fantom-foundation/libtransport" }
 libtransport-tcp = { git = "https://github.com/Fantom-foundation/libtransport-tcp" }
 libcommon-rs = { git = "https://github.com/Fantom-foundation/libcommon-rs" }
-futures-preview = { version = "=0.3.0-alpha.17", features = ["compat"] }
+futures-preview = { version = "0.3.0-alpha.19", features = ["compat"] }
 libhash = { git = "https://github.com/Fantom-foundation/libhash" }
 libhash-sha3 = { git = "https://github.com/Fantom-foundation/libhash-sha3" }
 libsignature = { git = "https://github.com/Fantom-foundation/libsignature" }
