@@ -6,6 +6,7 @@ use crate::peer::Frame;
 use crate::store::DAGstore;
 use crate::store_sled::SledStore;
 use crate::transactions::InternalTransaction;
+use core::mem::swap;
 use libcommon_rs::data::DataType;
 use libcommon_rs::peer::PeerId;
 use libconsensus::errors::Error::AtMaxVecCapacity;
@@ -81,14 +82,13 @@ where
         Ok(())
     }
     pub(crate) fn next_transactions(&mut self) -> Vec<Data> {
-        let len = self.tx_pool.len();
+        let mut len = self.tx_pool.len();
         if len > Self::TRANSACTIONS_LIMIT {
             len = Self::TRANSACTIONS_LIMIT;
         }
-        let new_trx = self.tx_pool.split_off(len);
-        let old_trx = self.tx_pool;
-        self.tx_pool = new_trx;
-        old_trx
+        let mut new_trx = self.tx_pool.split_off(len);
+        swap(&mut self.tx_pool, &mut new_trx);
+        new_trx
     }
     pub(crate) fn add_internal_transaction(
         &mut self,
@@ -102,14 +102,13 @@ where
         Ok(())
     }
     pub(crate) fn next_internal_transactions(&mut self) -> Vec<InternalTransaction<P, PK>> {
-        let len = self.internal_tx_pool.len();
+        let mut len = self.internal_tx_pool.len();
         if len > Self::TRANSACTIONS_LIMIT {
             len = Self::TRANSACTIONS_LIMIT;
         }
-        let new_trx = self.internal_tx_pool.split_off(len);
-        let old_trx = self.internal_tx_pool;
-        self.internal_tx_pool = new_trx;
-        old_trx
+        let mut new_trx = self.internal_tx_pool.split_off(len);
+        swap(&mut self.internal_tx_pool, &mut new_trx);
+        new_trx
     }
     pub(crate) fn update_lamport_time(&mut self, time: LamportTime) {
         if self.lamport_time < time {
@@ -123,6 +122,15 @@ where
         Ok(true)
     }
     pub(crate) fn insert_event(&mut self, event: Event<Data, P, PK, Sig>) -> Result<bool> {
+        let self_parent = event.self_parent.clone();
+        let other_parent = event.other_parent.clone();
+        let (self_parent_event, other_parent_event) = {
+            let store = self.store.read().unwrap();
+            (
+                store.get_event(&self_parent).unwrap(),
+                store.get_event(&other_parent).unwrap(),
+            )
+        };
         Ok(true)
     }
 }

@@ -35,7 +35,7 @@ where
     fn set_event(&mut self, e: Event<Data, P, PK, Sig>) -> Result<()>;
 
     // Read Event with EventHash
-    fn get_event(&mut self, ex: &EventHash) -> Result<Event<Data, P, PK, Sig>>;
+    fn get_event(&self, ex: &EventHash) -> Result<Event<Data, P, PK, Sig>>;
 
     // Read Event with Creator and Height
     fn get_event_of_creator(&self, creator: P, height: Height) -> Result<Event<Data, P, PK, Sig>>;
@@ -44,7 +44,7 @@ where
     fn set_flag_table(&mut self, ex: &EventHash, ft: FlagTable) -> Result<()>;
 
     // Read FlagTable with EventHash
-    fn get_flag_table(&mut self, ex: &EventHash) -> Result<FlagTable>;
+    fn get_flag_table(&self, ex: &EventHash) -> Result<FlagTable>;
 
     fn get_events_for_gossip(
         &self,

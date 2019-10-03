@@ -13,6 +13,7 @@ use crate::core::DAGcore;
 use crate::errors::{Error, Result};
 use crate::event::Event;
 use crate::peer::DAGPeerList;
+use crate::peer::Frame;
 use crate::peer::GossipList;
 use crate::sync::{SyncReply, SyncReq};
 use crate::transactions::InternalTransaction;
@@ -153,7 +154,7 @@ where
         let gossip_list: GossipList<P> = cfg.peers.get_gossip_list();
         let request = SyncReq {
             from: cfg.peers[0].id.clone(), // FIXME: we assume creator is the peer of index 0
-            to: peer.id,
+            to: peer.id.clone(),
             gossip_list,
             lamport_time: { core.read().unwrap().get_lamport_time() },
         };
@@ -211,28 +212,30 @@ where
             let mut local_core = core.write().unwrap();
             let creator = local_core.conf.read().unwrap().get_creator();
             let height = config
-                .read()
+                .write()
                 .unwrap()
                 .peers
-                .find_peer_mut(creator)
+                .find_peer_mut(creator.clone())
                 .unwrap()
                 .get_next_height();
-            let (self_parent_event, other_parent_event) = {
+            let (other_parent_event, self_parent_event) = {
                 let store = local_core.store.read().unwrap();
                 (
                     store
                         .get_event_of_creator(
-                            peer.id,
+                            peer.id.clone(),
                             config
-                                .read()
+                                .write()
                                 .unwrap()
                                 .peers
-                                .find_peer_mut(peer.id)
+                                .find_peer_mut(peer.id.clone())
                                 .unwrap()
                                 .get_height(),
                         )
                         .unwrap(),
-                    store.get_event_of_creator(creator, height - 1).unwrap(),
+                    store
+                        .get_event_of_creator(creator.clone(), height - 1)
+                        .unwrap(),
                 )
             };
             let self_parent = self_parent_event.hash;
@@ -240,7 +243,7 @@ where
             let lamport_timestamp = local_core.get_next_lamport_time();
             let transactions = local_core.next_transactions();
             let internal_transactions = local_core.next_internal_transactions();
-            let event: Event<D, P, PK, Sig> = Event {
+            let mut event: Event<D, P, PK, Sig> = Event {
                 creator,
                 height,
                 self_parent,
@@ -250,9 +253,14 @@ where
                 internal_transactions,
                 hash: EventHash::default(),
                 signatures: HashMap::new(),
-                frame_number,
-                ft,
+                frame_number: Frame::default(),
+                //                ft,
             };
+            let ex = event.event_hash().unwrap();
+            let rc = local_core.insert_event(event).unwrap();
+            if !rc {
+                error!("Error inserting new event {:?}", ex);
+            }
         }
 
         // wait until hearbeat interval expires

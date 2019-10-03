@@ -64,7 +64,7 @@ where
         Ok(())
     }
 
-    fn get_event(&mut self, ex: &EventHash) -> Result<Event<D, P, PK, Sig>> {
+    fn get_event(&self, ex: &EventHash) -> Result<Event<D, P, PK, Sig>> {
         let key = ex.to_vec();
         match self.event.get(&*key)? {
             Some(x) => Ok(deserialize::<Event<D, P, PK, Sig>>(&x)?),
@@ -82,7 +82,7 @@ where
         Ok(())
     }
 
-    fn get_flag_table(&mut self, ex: &EventHash) -> Result<FlagTable> {
+    fn get_flag_table(&self, ex: &EventHash) -> Result<FlagTable> {
         let key = ex.to_vec();
         match self.flag_table.get(&*key)? {
             Some(x) => Ok(deserialize::<FlagTable>(&x)?),
@@ -112,10 +112,10 @@ where
                             if err == Error::NoneError {
                                 break;
                             } else {
-                                return Err(e);
+                                return Err(err.into());
                             }
                         }
-                        Err(_) => return Err(e),
+                        Err(erx) => return Err(erx),
                     },
                     Ok(event) => event,
                 };

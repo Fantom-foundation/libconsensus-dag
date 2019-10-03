@@ -84,10 +84,16 @@ fn derive_creator_table<
                     if err == Error::NoneError {
                         warn!("Event {:?} not found", key)
                     } else {
-                        error!("Error {:?} encountered while retrieving event {:?}", e, key)
+                        error!(
+                            "Error {:?} encountered while retrieving event {:?}",
+                            err, key
+                        )
                     }
                 }
-                Err(_) => error!("Error {:?} encountered while retrieving event {:?}", e, key),
+                Err(erx) => error!(
+                    "Error {:?} encountered while retrieving event {:?}",
+                    erx, key
+                ),
             },
             Ok(e) => match result.get(&e.creator) {
                 Some(frame) => {

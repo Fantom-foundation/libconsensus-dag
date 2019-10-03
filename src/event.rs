@@ -23,15 +23,15 @@ where
 {
     pub(crate) creator: P,
     pub(crate) height: Height,
-    self_parent: EventHash,
-    other_parent: EventHash,
-    lamport_timestamp: LamportTime,
-    transactions: Vec<Data>,
-    internal_transactions: Vec<InternalTransaction<P, PK>>,
+    pub(crate) self_parent: EventHash,
+    pub(crate) other_parent: EventHash,
+    pub(crate) lamport_timestamp: LamportTime,
+    pub(crate) transactions: Vec<Data>,
+    pub(crate) internal_transactions: Vec<InternalTransaction<P, PK>>,
     pub(crate) hash: EventHash,
     pub(crate) signatures: HashMap<P, Sig>,
-    frame_number: Frame,
-    ft: FlagTable,
+    pub(crate) frame_number: Frame,
+    //    ft: FlagTable,
 }
 
 /// NetEvent is the event transferred between nodes over the network;
@@ -130,7 +130,7 @@ where
             hash: EventHash::default(),
             signatures: ev.signatures,
             frame_number: Frame::default(),
-            ft: FlagTable::new(),
+            //            ft: FlagTable::new(),
         };
         let _ = ex.event_hash().unwrap();
         ex
@@ -163,7 +163,7 @@ where
             hash: EventHash::default(),
             signatures: HashMap::new(),
             frame_number: Frame::default(),
-            ft: FlagTable::new(),
+            //            ft: FlagTable::new(),
         };
         event
     }
