@@ -319,10 +319,19 @@ where
     }
 
     // Find a peer for read/write operations
-    pub fn find_peer_mut(&mut self, id: P) -> Result<&mut DAGPeer<P, PK>> {
+    pub(crate) fn find_peer_mut(&mut self, id: P) -> Result<&mut DAGPeer<P, PK>> {
         match self.peers.iter_mut().find(|x| x.id == id) {
             None => Err(Error::NoneError.into()),
             Some(p_ref) => Ok(p_ref),
         }
+    }
+
+    /// Return RootMajority value
+    pub(crate) fn root_majority(&self) -> usize {
+        2 * self.peers.len() / 3 + 1
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.peers.len()
     }
 }

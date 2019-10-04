@@ -31,7 +31,6 @@ where
     pub(crate) hash: EventHash,
     pub(crate) signatures: HashMap<P, Sig>,
     pub(crate) frame_number: Frame,
-    //    ft: FlagTable,
 }
 
 /// NetEvent is the event transferred between nodes over the network;
@@ -130,7 +129,6 @@ where
             hash: EventHash::default(),
             signatures: ev.signatures,
             frame_number: Frame::default(),
-            //            ft: FlagTable::new(),
         };
         let _ = ex.event_hash().unwrap();
         ex
@@ -163,7 +161,6 @@ where
             hash: EventHash::default(),
             signatures: HashMap::new(),
             frame_number: Frame::default(),
-            //            ft: FlagTable::new(),
         };
         event
     }

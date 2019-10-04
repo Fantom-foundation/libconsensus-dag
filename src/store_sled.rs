@@ -72,7 +72,7 @@ where
         }
     }
 
-    fn set_flag_table(&mut self, ex: &EventHash, ft: FlagTable) -> Result<()> {
+    fn set_flag_table(&mut self, ex: &EventHash, ft: &FlagTable) -> Result<()> {
         let key = ex.clone().to_vec();
         let e_bytes = serialize(&ft)?;
         self.flag_table.insert(key, e_bytes)?;

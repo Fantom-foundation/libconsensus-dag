@@ -18,7 +18,7 @@ pub(crate) type CreatorFlagTable<PeerId> = HashMap<PeerId, Frame>;
 // Strict flag table merging procedure takes two flag tables and the frame number
 // and forms a new flag table which contains only those entries from any of source
 // flag tables whose corresponding frame number is equal to the frame number specified.
-fn strict_merge_flag_table(
+pub(crate) fn strict_merge_flag_table(
     first: &FlagTable,
     second: &FlagTable,
     frame_number: Frame,
@@ -41,7 +41,11 @@ fn strict_merge_flag_table(
 // and forms a new flagtable which contains only those entries from any of source
 // flag tables whose corresponding frame number is equal or greater to the frame
 // number specified.
-fn open_merge_flag_table(first: &FlagTable, second: &FlagTable, frame_number: Frame) -> FlagTable {
+pub(crate) fn open_merge_flag_table(
+    first: &FlagTable,
+    second: &FlagTable,
+    frame_number: Frame,
+) -> FlagTable {
     let mut result = FlagTable::new();
     for (key, value) in first.iter() {
         if *value >= frame_number {
@@ -63,49 +67,20 @@ fn open_merge_flag_table(first: &FlagTable, second: &FlagTable, frame_number: Fr
     result
 }
 
-// This procedure takes a store and a flag table as input
-// and produces a map which stores creator's hashes of visible roots;
-// for each root it stores minimal frame number.
-fn derive_creator_table<
-    P: PeerId,
-    Data: DataType,
-    PK: PublicKey,
-    Sig: Signature,
-    S: DAGstore<Data, P, PK, Sig>,
->(
-    store: &mut S,
-    ft: &FlagTable,
-) -> CreatorFlagTable<P> {
-    let mut result = CreatorFlagTable::<P>::new();
-    for (key, value) in ft.iter() {
-        match store.get_event(key) {
-            Err(e) => match e.downcast::<Error>() {
-                Ok(err) => {
-                    if err == Error::NoneError {
-                        warn!("Event {:?} not found", key)
-                    } else {
-                        error!(
-                            "Error {:?} encountered while retrieving event {:?}",
-                            err, key
-                        )
-                    }
+pub(crate) fn min_frame(ft: &FlagTable) -> Frame {
+    let mut res: Option<Frame> = None;
+    for (_, frame) in ft.iter() {
+        match res {
+            None => res = Some(*frame),
+            Some(x) => {
+                if x > *frame {
+                    res = Some(*frame)
                 }
-                Err(erx) => error!(
-                    "Error {:?} encountered while retrieving event {:?}",
-                    erx, key
-                ),
-            },
-            Ok(e) => match result.get(&e.creator) {
-                Some(frame) => {
-                    if *frame > *value {
-                        result.insert(e.creator, *value);
-                    }
-                }
-                _ => {
-                    result.insert(e.creator, *value);
-                }
-            },
-        };
+            }
+        }
     }
-    result
+    match res {
+        None => 0,
+        Some(x) => x,
+    }
 }

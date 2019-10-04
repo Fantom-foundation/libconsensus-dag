@@ -1,6 +1,7 @@
 use crate::conf::DAGconfig;
 use crate::errors::Result;
 use crate::event::Event;
+use crate::flag_table::{min_frame, open_merge_flag_table, strict_merge_flag_table};
 use crate::lamport_time::LamportTime;
 use crate::peer::Frame;
 use crate::store::DAGstore;
@@ -121,16 +122,75 @@ where
         // - all signatures must be verified positively
         Ok(true)
     }
-    pub(crate) fn insert_event(&mut self, event: Event<Data, P, PK, Sig>) -> Result<bool> {
+    pub(crate) fn insert_event(&mut self, mut event: Event<Data, P, PK, Sig>) -> Result<bool> {
+        let event_hash = event.event_hash()?;
         let self_parent = event.self_parent.clone();
         let other_parent = event.other_parent.clone();
-        let (self_parent_event, other_parent_event) = {
+        let (self_parent_event, other_parent_event, self_parent_ft, other_parent_ft) = {
             let store = self.store.read().unwrap();
             (
-                store.get_event(&self_parent).unwrap(),
-                store.get_event(&other_parent).unwrap(),
+                store.get_event(&self_parent)?,
+                store.get_event(&other_parent)?,
+                store.get_flag_table(&self_parent)?,
+                store.get_flag_table(&other_parent)?,
             )
         };
+        let mut root: bool = false;
+        let mut frame: Frame = Frame::default();
+        if self_parent_event.frame_number == other_parent_event.frame_number {
+            let root_flag_table = strict_merge_flag_table(
+                &self_parent_ft,
+                &other_parent_ft,
+                self_parent_event.frame_number,
+            );
+            let creator_root_flag_table = {
+                let store = self.store.read().unwrap();
+                store.derive_creator_flag_table(&root_flag_table)
+            };
+            let root_majority = {
+                let conf = self.conf.read().unwrap();
+                conf.peers.root_majority()
+            };
+            if creator_root_flag_table.len() >= root_majority {
+                root = true;
+                frame = self_parent_event.frame_number + 1;
+            } else {
+                root = false;
+                frame = self_parent_event.frame_number;
+            }
+        } else if self_parent_event.frame_number > other_parent_event.frame_number {
+            root = false;
+            frame = self_parent_event.frame_number;
+        } else {
+            root = true;
+            frame = other_parent_event.frame_number;
+        }
+        event.frame_number = frame;
+        let first_not_finalised_frame = match self.last_finalised_frame {
+            Some(x) => x + 1,
+            None => 0,
+        };
+        let mut visibilis_flag_table =
+            open_merge_flag_table(&self_parent_ft, &other_parent_ft, first_not_finalised_frame);
+        if root {
+            visibilis_flag_table.insert(event_hash.clone(), frame);
+        }
+        {
+            let mut store = self.store.write().unwrap();
+            store.set_flag_table(&event_hash, &visibilis_flag_table)?;
+        }
+        let creator_visibilis_flag_table = {
+            let store = self.store.read().unwrap();
+            store.derive_creator_flag_table(&visibilis_flag_table)
+        };
+        let peer_size = self.conf.read().unwrap().peers.len();
+        if peer_size == creator_visibilis_flag_table.len() {
+            let frame_upto = min_frame(&visibilis_flag_table);
+            for frame in first_not_finalised_frame..frame_upto {
+                // FIXME: need to be implemented
+                //self.finalise_frame(frame)
+            }
+        }
         Ok(true)
     }
 }
