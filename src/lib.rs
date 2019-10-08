@@ -207,7 +207,6 @@ where
         });
 
         // create new event if needed referring remote peer as other-parent
-        // FIXME: need to be implemented
         {
             let mut local_core = core.write().unwrap();
             let creator = local_core.conf.read().unwrap().get_creator();
@@ -254,7 +253,6 @@ where
                 hash: EventHash::default(),
                 signatures: HashMap::new(),
                 frame_number: Frame::default(),
-                //                ft,
             };
             let ex = event.event_hash().unwrap();
             let rc = local_core.insert_event(event).unwrap();
