@@ -16,17 +16,17 @@ where
     SK: SecretKey,
     PK: PublicKey,
 {
-    pub(crate) request_addr: String,
-    pub(crate) reply_addr: String,
+    pub request_addr: String,
+    pub reply_addr: String,
     pub(crate) shutdown: bool,
-    pub(crate) transport_type: TransportType,
-    pub(crate) store_type: StoreType,
+    pub transport_type: TransportType,
+    pub store_type: StoreType,
     // heartbeat duration in milliseconds
-    pub(crate) heartbeat: u64,
+    pub heartbeat: u64,
     pub(crate) waker: Option<Waker>,
     pub(crate) peers: DAGPeerList<P, PK>,
-    pub(crate) creator: P,
-    pub(crate) secret_key: SK,
+    pub creator: P,
+    pub secret_key: SK,
     phantom: PhantomData<Data>,
 }
 

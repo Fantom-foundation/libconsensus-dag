@@ -32,7 +32,7 @@ impl From<LibhashError> for Error {
 
 impl From<NoneError> for Error {
     #[inline]
-    fn from(none_error: NoneError) -> Error {
+    fn from(_none_error: NoneError) -> Error {
         Error::NoneError
     }
 }
@@ -105,7 +105,7 @@ impl PartialEq for Error {
                 // FIXME: implement PartialEq trait for libconsensus::errors::Error
                 false
             }
-            Error::LibHash(ref l) => {
+            Error::LibHash(ref _l) => {
                 // FIXME: implement PartialEq trait for libhash::errors::Error
                 false
             }
