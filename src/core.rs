@@ -189,8 +189,10 @@ where
             for frame in first_not_finalised_frame..frame_upto {
                 // FIXME: need to be implemented
                 //self.finalise_frame(frame)
+                self.last_finalised_frame = Some(frame);
             }
         }
+        self.store.write().unwrap().set_event(event)?;
         Ok(true)
     }
 }
