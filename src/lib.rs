@@ -490,6 +490,7 @@ mod core;
 mod errors;
 mod event;
 mod flag_table;
+mod frame;
 mod lamport_time;
 mod peer;
 mod store;
