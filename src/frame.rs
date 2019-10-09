@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 // A frame record for a single event; must contains all fields used in
 // final ordering calculation
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct FrameRecord {
     pub(crate) hash: EventHash,
     pub(crate) lamport_time: LamportTime,

@@ -31,8 +31,10 @@ where
     tx_pool: Vec<Data>,
     internal_tx_pool: Vec<InternalTransaction<P, PK>>,
     lamport_time: LamportTime,
-    current_frame: FrameNumber,
-    last_finalised_frame: Option<FrameNumber>,
+    pub(crate) current_frame: Option<FrameNumber>,
+    pub(crate) current_event: Option<usize>,
+    pub(crate) current_tx: Option<usize>,
+    pub(crate) last_finalised_frame: Option<FrameNumber>,
 }
 
 impl<P, Data, SK, PK, Sig> DAGcore<P, Data, SK, PK, Sig>
@@ -62,8 +64,10 @@ where
             store: Arc::new(RwLock::new(store)),
             tx_pool: Vec::with_capacity(1),
             internal_tx_pool: Vec::with_capacity(1),
-            lamport_time: 0,
-            current_frame: 0,
+            lamport_time: LamportTime::default(),
+            current_frame: None,
+            current_event: Some(0),
+            current_tx: Some(0),
             last_finalised_frame: None,
         }
     }
@@ -190,6 +194,10 @@ where
                 // FIXME: need to be implemented
                 //self.finalise_frame(frame)
                 self.last_finalised_frame = Some(frame);
+                // notify consumer on next transaction in consensus availability
+                if let Some(waker) = self.conf.write().unwrap().waker.take() {
+                    waker.wake();
+                }
             }
         }
         self.store.write().unwrap().set_event(event)?;

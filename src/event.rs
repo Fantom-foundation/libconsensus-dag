@@ -1,5 +1,4 @@
 use crate::errors::Result;
-use crate::flag_table::FlagTable;
 use crate::lamport_time::LamportTime;
 use crate::peer::FrameNumber;
 use crate::peer::Height;

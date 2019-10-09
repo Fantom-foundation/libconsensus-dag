@@ -1,12 +1,6 @@
-use libcommon_rs::data::DataType;
-use libsignature::PublicKey;
-use libsignature::Signature;
 use log::{error, warn};
 
-use crate::errors::Error;
 use crate::peer::FrameNumber;
-use crate::store::DAGstore;
-use libcommon_rs::peer::PeerId;
 use libhash_sha3::Hash as EventHash;
 use std::collections::HashMap;
 

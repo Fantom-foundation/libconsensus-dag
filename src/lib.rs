@@ -359,30 +359,30 @@ where
 {
     type Configuration = DAGconfig<P, D, SK, PK>;
 
-    fn new(mut cfg: DAGconfig<P, D, SK, PK>) -> BaseResult<DAG<P, D, SK, PK, Sig>> {
+    fn new(cfg: DAGconfig<P, D, SK, PK>) -> BaseResult<DAG<P, D, SK, PK, Sig>> {
         let (tx, rx) = mpsc::channel();
         //cfg.set_quit_rx(rx);
-        let bind_addr = cfg.request_addr.clone();
-        let reply_addr = cfg.reply_addr.clone();
-        let transport_type = cfg.transport_type.clone();
-        let mut sr_transport = {
-            match transport_type {
-                libtransport::TransportType::TCP => {
-                    TCPtransport::<P, SyncReq<P>, Error, DAGPeerList<P, PK>>::new(bind_addr)?
-                }
-                libtransport::TransportType::Unknown => panic!("unknown transport"),
-            }
-        };
-        let mut sp_transport = {
-            match transport_type {
-                libtransport::TransportType::TCP => {
-                    TCPtransport::<P, SyncReply<D, P, PK, Sig>, Error, DAGPeerList<P, PK>>::new(
-                        reply_addr,
-                    )?
-                }
-                libtransport::TransportType::Unknown => panic!("unknown transport"),
-            }
-        };
+        //        let bind_addr = cfg.request_addr.clone();
+        //        let reply_addr = cfg.reply_addr.clone();
+        //        let transport_type = cfg.transport_type.clone();
+        //        let mut sr_transport = {
+        //            match transport_type {
+        //                libtransport::TransportType::TCP => {
+        //                    TCPtransport::<P, SyncReq<P>, Error, DAGPeerList<P, PK>>::new(bind_addr)?
+        //                }
+        //                libtransport::TransportType::Unknown => panic!("unknown transport"),
+        //            }
+        //        };
+        //        let mut sp_transport = {
+        //            match transport_type {
+        //                libtransport::TransportType::TCP => {
+        //                    TCPtransport::<P, SyncReply<D, P, PK, Sig>, Error, DAGPeerList<P, PK>>::new(
+        //                        reply_addr,
+        //                    )?
+        //                }
+        //                libtransport::TransportType::Unknown => panic!("unknown transport"),
+        //            }
+        //        };
 
         let core = Arc::new(RwLock::new(DAGcore::new(cfg)));
 
@@ -466,14 +466,62 @@ where
     type Item = Data;
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let myself = Pin::get_mut(self);
-        let config = {
-            let core = myself.core.write().unwrap();
-            Arc::clone(&core.conf)
+        let mut core = myself.core.write().unwrap();
+        let last_finalised_frame: FrameNumber = match core.last_finalised_frame {
+            None => {
+                core.conf.write().unwrap().waker = Some(cx.waker().clone());
+                return Poll::Pending;
+            }
+            Some(x) => x,
         };
-        let mut cfg = config.write().unwrap();
-        // FIXME: need to be implemented
-        cfg.waker = Some(cx.waker().clone());
-        Poll::Pending
+        let mut current_frame: FrameNumber = match core.current_frame {
+            None => 0,
+            Some(x) => x,
+        };
+        let mut current_event = match core.current_event {
+            None => {
+                if current_frame >= last_finalised_frame {
+                    core.conf.write().unwrap().waker = Some(cx.waker().clone());
+                    return Poll::Pending;
+                }
+                current_frame += 1;
+                0
+            }
+            Some(x) => x,
+        };
+        let mut current_tx = match core.current_tx {
+            None => 0,
+            Some(x) => x,
+        };
+
+        let frame = core.store.read().unwrap().get_frame(current_frame).unwrap();
+        let n_events = frame.events.len();
+
+        let event_record = frame.events[current_event];
+        let mut event = core
+            .store
+            .read()
+            .unwrap()
+            .get_event(&event_record.hash)
+            .unwrap();
+
+        let n_tx = event.transactions.len();
+        let data = event.transactions.swap_remove(current_tx);
+        current_tx += 1;
+        if current_tx < n_tx {
+            core.current_tx = Some(current_tx);
+        } else {
+            core.current_tx = Some(0);
+            current_event += 1;
+            if current_event < n_events {
+                core.current_event = Some(current_event);
+            } else {
+                core.current_event = None;
+                core.current_frame = Some(current_frame + 1);
+            }
+        }
+
+        Poll::Ready(Some(data))
     }
 }
 
