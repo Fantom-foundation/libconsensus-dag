@@ -4,6 +4,8 @@ use crate::errors::{Error, Result};
 use crate::event::Event;
 use crate::event::NetEvent;
 use crate::flag_table::{CreatorFlagTable, FlagTable};
+use crate::frame::Frame;
+use crate::peer::FrameNumber;
 use crate::peer::GossipList;
 use crate::peer::Height;
 use libcommon_rs::peer::PeerId;
@@ -45,6 +47,8 @@ where
 
     // Read FlagTable with EventHash
     fn get_flag_table(&self, ex: &EventHash) -> Result<FlagTable>;
+
+    fn get_frame(&self, frame: FrameNumber) -> Result<Frame>;
 
     fn get_events_for_gossip(
         &self,

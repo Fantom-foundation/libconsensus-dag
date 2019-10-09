@@ -4,16 +4,16 @@ use libsignature::Signature;
 use log::{error, warn};
 
 use crate::errors::Error;
-use crate::peer::Frame;
+use crate::peer::FrameNumber;
 use crate::store::DAGstore;
 use libcommon_rs::peer::PeerId;
 use libhash_sha3::Hash as EventHash;
 use std::collections::HashMap;
 
 // FlagTable is a map from EventHash into Frame number
-pub(crate) type FlagTable = HashMap<EventHash, Frame>;
+pub(crate) type FlagTable = HashMap<EventHash, FrameNumber>;
 // CreatorFlagTable is a map from PeerId into Frame number (Frame)
-pub(crate) type CreatorFlagTable<PeerId> = HashMap<PeerId, Frame>;
+pub(crate) type CreatorFlagTable<PeerId> = HashMap<PeerId, FrameNumber>;
 
 // Strict flag table merging procedure takes two flag tables and the frame number
 // and forms a new flag table which contains only those entries from any of source
@@ -21,7 +21,7 @@ pub(crate) type CreatorFlagTable<PeerId> = HashMap<PeerId, Frame>;
 pub(crate) fn strict_merge_flag_table(
     first: &FlagTable,
     second: &FlagTable,
-    frame_number: Frame,
+    frame_number: FrameNumber,
 ) -> FlagTable {
     let mut result = FlagTable::new();
     for (key, value) in first.iter() {
@@ -44,7 +44,7 @@ pub(crate) fn strict_merge_flag_table(
 pub(crate) fn open_merge_flag_table(
     first: &FlagTable,
     second: &FlagTable,
-    frame_number: Frame,
+    frame_number: FrameNumber,
 ) -> FlagTable {
     let mut result = FlagTable::new();
     for (key, value) in first.iter() {
@@ -67,8 +67,8 @@ pub(crate) fn open_merge_flag_table(
     result
 }
 
-pub(crate) fn min_frame(ft: &FlagTable) -> Frame {
-    let mut res: Option<Frame> = None;
+pub(crate) fn min_frame(ft: &FlagTable) -> FrameNumber {
+    let mut res: Option<FrameNumber> = None;
     for (_, frame) in ft.iter() {
         match res {
             None => res = Some(*frame),

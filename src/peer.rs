@@ -12,7 +12,7 @@ use std::io::Read;
 use std::net::SocketAddr;
 use std::ops::{Index, IndexMut};
 
-pub(crate) type Frame = usize;
+pub(crate) type FrameNumber = usize;
 pub(crate) type Height = usize;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

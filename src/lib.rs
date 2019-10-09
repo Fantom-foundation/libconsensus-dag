@@ -13,7 +13,7 @@ use crate::core::DAGcore;
 use crate::errors::{Error, Result};
 use crate::event::Event;
 use crate::peer::DAGPeerList;
-use crate::peer::Frame;
+use crate::peer::FrameNumber;
 use crate::peer::GossipList;
 use crate::sync::{SyncReply, SyncReq};
 use crate::transactions::InternalTransaction;
@@ -252,7 +252,7 @@ where
                 internal_transactions,
                 hash: EventHash::default(),
                 signatures: HashMap::new(),
-                frame_number: Frame::default(),
+                frame_number: FrameNumber::default(),
             };
             let ex = event.event_hash().unwrap();
             let rc = local_core.insert_event(event).unwrap();

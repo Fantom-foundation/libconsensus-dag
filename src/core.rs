@@ -3,7 +3,7 @@ use crate::errors::Result;
 use crate::event::Event;
 use crate::flag_table::{min_frame, open_merge_flag_table, strict_merge_flag_table};
 use crate::lamport_time::LamportTime;
-use crate::peer::Frame;
+use crate::peer::FrameNumber;
 use crate::store::DAGstore;
 use crate::store_sled::SledStore;
 use crate::transactions::InternalTransaction;
@@ -31,8 +31,8 @@ where
     tx_pool: Vec<Data>,
     internal_tx_pool: Vec<InternalTransaction<P, PK>>,
     lamport_time: LamportTime,
-    current_frame: Frame,
-    last_finalised_frame: Option<Frame>,
+    current_frame: FrameNumber,
+    last_finalised_frame: Option<FrameNumber>,
 }
 
 impl<P, Data, SK, PK, Sig> DAGcore<P, Data, SK, PK, Sig>
@@ -136,7 +136,7 @@ where
             )
         };
         let mut root: bool = false;
-        let mut frame: Frame = Frame::default();
+        let mut frame: FrameNumber = FrameNumber::default();
         if self_parent_event.frame_number == other_parent_event.frame_number {
             let root_flag_table = strict_merge_flag_table(
                 &self_parent_ft,

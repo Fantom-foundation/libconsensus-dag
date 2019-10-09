@@ -6,13 +6,13 @@ use serde::{Deserialize, Serialize};
 // final ordering calculation
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct FrameRecord {
-    hash: EventHash,
-    lamport_time: LamportTime,
+    pub(crate) hash: EventHash,
+    pub(crate) lamport_time: LamportTime,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct Frame {
-    events: Vec<FrameRecord>,
+    pub(crate) events: Vec<FrameRecord>,
 }
 
 impl Default for Frame {

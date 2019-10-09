@@ -2,6 +2,9 @@ extern crate sled;
 
 use crate::event::Event;
 use crate::event::NetEvent;
+use crate::frame::Frame;
+use crate::frame::FrameRecord;
+use crate::peer::FrameNumber;
 use crate::peer::GossipList;
 use crate::peer::Height;
 use crate::store::*;
@@ -20,6 +23,7 @@ use to_vec::ToVec;
 pub(crate) struct SledStore {
     event: sled::Db,
     flag_table: sled::Db,
+    frame: sled::Db,
     sync: bool,
 }
 
@@ -40,10 +44,15 @@ where
             .path(Path::new(base_path).join("flag_tables").as_path())
             .print_profile_on_drop(true) // if true, gives summary of latency historgrams
             .build();
+        let frame_config = sled::ConfigBuilder::new()
+            .path(Path::new(base_path).join("frames").as_path())
+            .print_profile_on_drop(true) // if true, gives summary of latency historgrams
+            .build();
 
         Ok(SledStore {
             event: sled::Db::start(event_config)?,
             flag_table: sled::Db::start(ft_config)?,
+            frame: sled::Db::start(frame_config)?,
             sync: true, // let be synchronous in writing, though it's slow
         })
     }
@@ -61,6 +70,21 @@ where
         if self.sync {
             self.event.flush()?;
         }
+        let frame_key = format!("{}", e.frame_number).into_bytes();
+        let mut frame: Frame = match self.frame.get(&*frame_key)? {
+            Some(x) => deserialize::<Frame>(&x)?,
+            None => Frame::default(),
+        };
+        let record = FrameRecord {
+            hash: e.get_hash(),
+            lamport_time: e.lamport_timestamp,
+        };
+        frame.events.push(record);
+        let f_bytes = serialize(&frame)?;
+        self.frame.insert(frame_key, f_bytes)?;
+        if self.sync {
+            self.frame.flush()?;
+        }
         Ok(())
     }
 
@@ -69,6 +93,14 @@ where
         match self.event.get(&*key)? {
             Some(x) => Ok(deserialize::<Event<D, P, PK, Sig>>(&x)?),
             None => Err(Error::NoneError.into()),
+        }
+    }
+
+    fn get_frame(&self, frame_number: FrameNumber) -> Result<Frame> {
+        let frame_key = format!("{}", frame_number).into_bytes();
+        match self.frame.get(&*frame_key)? {
+            Some(x) => Ok(deserialize::<Frame>(&x)?),
+            None => Ok(Frame::default()),
         }
     }
 

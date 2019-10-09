@@ -1,7 +1,7 @@
 use crate::errors::Result;
 use crate::flag_table::FlagTable;
 use crate::lamport_time::LamportTime;
-use crate::peer::Frame;
+use crate::peer::FrameNumber;
 use crate::peer::Height;
 use crate::transactions::InternalTransaction;
 use core::hash::Hash;
@@ -30,7 +30,7 @@ where
     pub(crate) internal_transactions: Vec<InternalTransaction<P, PK>>,
     pub(crate) hash: EventHash,
     pub(crate) signatures: HashMap<P, Sig>,
-    pub(crate) frame_number: Frame,
+    pub(crate) frame_number: FrameNumber,
 }
 
 /// NetEvent is the event transferred between nodes over the network;
@@ -128,7 +128,7 @@ where
             internal_transactions: ev.internal_transactions,
             hash: EventHash::default(),
             signatures: ev.signatures,
-            frame_number: Frame::default(),
+            frame_number: FrameNumber::default(),
         };
         let _ = ex.event_hash().unwrap();
         ex
@@ -160,7 +160,7 @@ where
             internal_transactions,
             hash: EventHash::default(),
             signatures: HashMap::new(),
-            frame_number: Frame::default(),
+            frame_number: FrameNumber::default(),
         };
         event
     }
