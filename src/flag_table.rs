@@ -1,5 +1,3 @@
-use log::{error, warn};
-
 use crate::peer::FrameNumber;
 use libhash_sha3::Hash as EventHash;
 use std::collections::HashMap;

@@ -26,17 +26,13 @@ use libcommon_rs::data::DataType;
 use libcommon_rs::peer::PeerId;
 use libconsensus::errors::Result as BaseResult;
 use libconsensus::Consensus;
-use libhash_sha3::Hash as EventHash;
 use libsignature::Signature;
 use libsignature::{PublicKey, SecretKey};
-use libtransport::Transport;
 use libtransport::TransportReceiver;
 use libtransport::TransportSender;
 use libtransport_tcp::receiver::TCPreceiver;
 use libtransport_tcp::sender::TCPsender;
-use libtransport_tcp::TCPtransport;
 use log::error;
-use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::mpsc::{self, Sender};
 use std::sync::mpsc::{Receiver, TryRecvError};
@@ -242,7 +238,7 @@ where
             let lamport_timestamp = local_core.get_next_lamport_time();
             let transactions = local_core.next_transactions();
             let internal_transactions = local_core.next_internal_transactions();
-            let mut event: Event<D, P, PK, Sig> = Event {
+            let mut event: Event<D, P, PK, Sig> = Event::new(
                 creator,
                 height,
                 self_parent,
@@ -250,10 +246,7 @@ where
                 lamport_timestamp,
                 transactions,
                 internal_transactions,
-                hash: EventHash::default(),
-                signatures: HashMap::new(),
-                frame_number: FrameNumber::default(),
-            };
+            );
             let ex = event.event_hash().unwrap();
             let rc = local_core.insert_event(event).unwrap();
             if !rc {

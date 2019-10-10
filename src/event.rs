@@ -143,15 +143,16 @@ where
 {
     pub(crate) fn new(
         creator: P,
+        height: usize,
         self_parent: EventHash,
         other_parent: EventHash,
         lamport_timestamp: LamportTime,
         transactions: Vec<Data>,
         internal_transactions: Vec<InternalTransaction<P, PK>>,
     ) -> Self {
-        let mut event = Event {
+        let event = Event {
             creator,
-            height: 0,
+            height,
             self_parent,
             other_parent,
             lamport_timestamp,
