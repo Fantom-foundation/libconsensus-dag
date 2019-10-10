@@ -7,7 +7,6 @@ use libcommon_rs::Stub;
 use libhash_sha3::Hash as EventHash;
 use libsignature::PublicKey;
 use libsignature::Signature;
-use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 // Sync request
