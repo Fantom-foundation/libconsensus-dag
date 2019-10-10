@@ -418,6 +418,21 @@ where
 {
     fn drop(&mut self) {
         self.quit_tx.send(()).unwrap();
+        if let Some(listener_handle) = self.listener_handle.take() {
+            listener_handle
+                .join()
+                .expect("Couldn't join on the listener thread.");
+        }
+        if let Some(proc_a_handle) = self.proc_a_handle.take() {
+            proc_a_handle
+                .join()
+                .expect("Couldn't join on the procedure A thread.");
+        }
+        if let Some(proc_b_handle) = self.proc_b_handle.take() {
+            proc_b_handle
+                .join()
+                .expect("Couldn't join on the procedure B thread.");
+        }
     }
 }
 
