@@ -32,7 +32,7 @@ where
     D: DataType,
     P: PeerId,
     PK: PublicKey,
-    Sig: Signature,
+    Sig: Signature<Hash = EventHash, PublicKey = PK>,
 {
     // function new() creates a new Sled based Storage
     fn new(base_path: &str) -> Result<SledStore> {

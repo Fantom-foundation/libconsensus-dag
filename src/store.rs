@@ -26,7 +26,7 @@ where
     Data: Serialize + DeserializeOwned + Send + Clone,
     P: PeerId,
     PK: PublicKey,
-    Sig: Signature,
+    Sig: Signature<Hash = EventHash, PublicKey = PK>,
 {
     // Create new stoirage for DAG Consensus
     fn new(path: &str) -> Result<Self>

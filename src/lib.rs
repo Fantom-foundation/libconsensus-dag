@@ -26,6 +26,7 @@ use libcommon_rs::data::DataType;
 use libcommon_rs::peer::PeerId;
 use libconsensus::errors::Result as BaseResult;
 use libconsensus::Consensus;
+use libhash_sha3::Hash as EventHash;
 use libsignature::Signature;
 use libsignature::{PublicKey, SecretKey};
 use libtransport::TransportReceiver;
@@ -48,7 +49,7 @@ where
     P: PeerId,
     SK: SecretKey,
     PK: PublicKey,
-    Sig: Signature,
+    Sig: Signature<Hash = EventHash, PublicKey = PK>,
 {
     //    conf: Arc<Mutex<DAGconfig<P, T>>>,
     core: Arc<RwLock<DAGcore<P, T, SK, PK, Sig>>>,
@@ -74,7 +75,7 @@ fn listener<P, Data: 'static, SK, PK, Sig>(
     P: PeerId,
     SK: SecretKey,
     PK: PublicKey,
-    Sig: Signature,
+    Sig: Signature<Hash = EventHash, PublicKey = PK>,
 {
     let config = { core.read().unwrap().conf.clone() };
     // FIXME: what we do with unwrap() in threads?
@@ -102,7 +103,7 @@ where
     P: PeerId + 'static,
     SK: SecretKey,
     PK: PublicKey + 'static,
-    Sig: Signature + 'static,
+    Sig: Signature<Hash = EventHash, PublicKey = PK> + 'static,
 {
     let config = { core.read().unwrap().conf.clone() };
     let mut ticker = {
@@ -194,7 +195,7 @@ where
                             .write()
                             .unwrap()
                             .peers
-                            .find_peer_mut(creator)
+                            .find_peer_mut(&creator)
                             .unwrap()
                             .update_lamport_time_and_height(lamport_time, height);
                     }
@@ -210,7 +211,7 @@ where
                 .write()
                 .unwrap()
                 .peers
-                .find_peer_mut(creator.clone())
+                .find_peer_mut(&creator)
                 .unwrap()
                 .get_next_height();
             let (other_parent_event, self_parent_event) = {
@@ -223,7 +224,7 @@ where
                                 .write()
                                 .unwrap()
                                 .peers
-                                .find_peer_mut(peer.id.clone())
+                                .find_peer_mut(&peer.id)
                                 .unwrap()
                                 .get_height(),
                         )
@@ -268,7 +269,7 @@ where
     P: PeerId + 'static,
     SK: SecretKey,
     PK: PublicKey + 'static,
-    Sig: Signature + 'static,
+    Sig: Signature<Hash = EventHash, PublicKey = PK> + 'static,
 {
     let config = { core.read().unwrap().conf.clone() };
     let (transport_type, request_bind_address) = {
@@ -321,10 +322,7 @@ where
                             .write()
                             .unwrap()
                             .peers
-                            .find_peer_with_lamport_time_update(
-                                reply.to.clone(),
-                                sync_req.lamport_time,
-                            )
+                            .find_peer_with_lamport_time_update(&reply.to, sync_req.lamport_time)
                     } {
                         Ok(peer) => {
                             let address = peer.reply_addr.clone();
@@ -348,7 +346,7 @@ where
     D: DataType + 'static,
     SK: SecretKey + 'static,
     PK: PublicKey + 'static,
-    Sig: Signature + 'static,
+    Sig: Signature<Hash = EventHash, PublicKey = PK> + 'static,
 {
     type Configuration = DAGconfig<P, D, SK, PK>;
 
@@ -416,7 +414,7 @@ where
     P: PeerId,
     SK: SecretKey,
     PK: PublicKey,
-    Sig: Signature,
+    Sig: Signature<Hash = EventHash, PublicKey = PK>,
 {
     fn drop(&mut self) {
         self.quit_tx.send(()).unwrap();
@@ -429,7 +427,7 @@ where
     P: PeerId,
     SK: SecretKey,
     PK: PublicKey,
-    Sig: Signature,
+    Sig: Signature<Hash = EventHash, PublicKey = PK>,
 {
     // send internal transaction
     fn send_internal_transaction(&mut self, tx: InternalTransaction<P, PK>) -> Result<()> {
@@ -444,7 +442,7 @@ where
     P: PeerId,
     SK: SecretKey,
     PK: PublicKey,
-    Sig: Signature,
+    Sig: Signature<Hash = EventHash, PublicKey = PK>,
 {
 }
 
@@ -454,7 +452,7 @@ where
     Data: DataType,
     SK: SecretKey,
     PK: PublicKey,
-    Sig: Signature,
+    Sig: Signature<Hash = EventHash, PublicKey = PK>,
 {
     type Item = Data;
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {

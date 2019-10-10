@@ -12,6 +12,7 @@ use libcommon_rs::data::DataType;
 use libcommon_rs::peer::PeerId;
 use libconsensus::errors::Error::AtMaxVecCapacity;
 use libconsensus::errors::Result as BaseResult;
+use libhash_sha3::Hash as EventHash;
 use libsignature::PublicKey;
 use libsignature::SecretKey;
 use libsignature::Signature;
@@ -24,7 +25,7 @@ where
     P: PeerId,
     SK: SecretKey,
     PK: PublicKey,
-    Sig: Signature,
+    Sig: Signature<Hash = EventHash, PublicKey = PK>,
 {
     pub(crate) conf: Arc<RwLock<DAGconfig<P, Data, SK, PK>>>,
     pub(crate) store: Arc<RwLock<dyn DAGstore<Data, P, PK, Sig>>>,
@@ -43,7 +44,7 @@ where
     Data: DataType,
     SK: SecretKey,
     PK: PublicKey,
-    Sig: Signature,
+    Sig: Signature<Hash = EventHash, PublicKey = PK>,
 {
     /// Defines maximum number of transactions in a single event
     const TRANSACTIONS_LIMIT: usize = 16000;
@@ -124,6 +125,13 @@ where
         // FIXME: implement event verification:
         // - self-parant must be the last known event of the creator with height one minus height of the event
         // - all signatures must be verified positively
+        for (signatory, signature) in event.signatures.iter() {
+            let peer = self.conf.read().unwrap().peers.find_peer(signatory)?;
+            let res = signature.verify(event.get_hash(), peer.get_public_key())?;
+            if !res {
+                return Ok(false);
+            }
+        }
         Ok(true)
     }
     pub(crate) fn insert_event(&mut self, mut event: Event<Data, P, PK, Sig>) -> Result<bool> {
@@ -139,8 +147,8 @@ where
                 store.get_flag_table(&other_parent)?,
             )
         };
-        let mut root: bool = false;
-        let mut frame: FrameNumber = FrameNumber::default();
+        let root: bool; // = false;
+        let frame: FrameNumber; // = FrameNumber::default();
         if self_parent_event.frame_number == other_parent_event.frame_number {
             let root_flag_table = strict_merge_flag_table(
                 &self_parent_ft,

@@ -19,6 +19,8 @@ use std::collections::HashMap;
 pub(crate) struct Event<Data, P, PK, Sig>
 where
     P: Eq + Hash,
+    PK: PublicKey,
+    Sig: Signature<Hash = EventHash, PublicKey = PK>,
 {
     pub(crate) creator: P,
     pub(crate) height: Height,
@@ -26,8 +28,10 @@ where
     pub(crate) other_parent: EventHash,
     pub(crate) lamport_timestamp: LamportTime,
     pub(crate) transactions: Vec<Data>,
+    #[serde(bound = "")]
     pub(crate) internal_transactions: Vec<InternalTransaction<P, PK>>,
     pub(crate) hash: EventHash,
+    #[serde(bound = "")]
     pub(crate) signatures: HashMap<P, Sig>,
     pub(crate) frame_number: FrameNumber,
 }
@@ -38,6 +42,8 @@ where
 pub(crate) struct NetEvent<Data, P, PK, Sig>
 where
     P: Eq + Hash,
+    PK: PublicKey,
+    Sig: Signature<Hash = EventHash, PublicKey = PK>,
 {
     pub(crate) creator: P,
     pub(crate) height: Height,
@@ -45,7 +51,9 @@ where
     other_parent: EventHash,
     lamport_timestamp: LamportTime,
     transactions: Vec<Data>,
+    #[serde(bound = "")]
     internal_transactions: Vec<InternalTransaction<P, PK>>,
+    #[serde(bound = "")]
     pub(crate) signatures: HashMap<P, Sig>,
 }
 
@@ -70,13 +78,15 @@ where
     Data: DataType,
     P: PeerId,
     PK: PublicKey,
-    Sig: Signature,
+    Sig: Signature<Hash = EventHash, PublicKey = PK>,
 {
 }
 
 impl<Data, P, PK, Sig> From<Event<Data, P, PK, Sig>> for HashEvent<Data, P, PK>
 where
     P: Eq + Hash,
+    PK: PublicKey,
+    Sig: Signature<Hash = EventHash, PublicKey = PK>,
 {
     fn from(ev: Event<Data, P, PK, Sig>) -> HashEvent<Data, P, PK> {
         return HashEvent {
@@ -94,6 +104,8 @@ where
 impl<Data, P, PK, Sig> From<Event<Data, P, PK, Sig>> for NetEvent<Data, P, PK, Sig>
 where
     P: Eq + Hash,
+    PK: PublicKey,
+    Sig: Signature<Hash = EventHash, PublicKey = PK>,
 {
     fn from(ev: Event<Data, P, PK, Sig>) -> NetEvent<Data, P, PK, Sig> {
         return NetEvent {
@@ -114,7 +126,7 @@ where
     Data: DataType,
     P: PeerId,
     PK: PublicKey,
-    Sig: Signature,
+    Sig: Signature<Hash = EventHash, PublicKey = PK>,
 {
     fn from(ev: NetEvent<Data, P, PK, Sig>) -> Event<Data, P, PK, Sig> {
         let mut ex: Event<Data, P, PK, Sig> = Event {
@@ -139,7 +151,7 @@ where
     Data: DataType,
     P: PeerId,
     PK: PublicKey,
-    Sig: Signature,
+    Sig: Signature<Hash = EventHash, PublicKey = PK>,
 {
     pub(crate) fn new(
         creator: P,

@@ -294,8 +294,8 @@ where
     }
 
     // Find a peer for read only operations
-    pub fn find_peer(&self, id: P) -> Result<DAGPeer<P, PK>> {
-        match self.peers.iter().find(|&x| x.id == id) {
+    pub fn find_peer(&self, id: &P) -> Result<DAGPeer<P, PK>> {
+        match self.peers.iter().find(|&x| x.id == *id) {
             None => Err(Error::NoneError.into()),
             Some(p_ref) => Ok(p_ref.clone()),
         }
@@ -304,10 +304,10 @@ where
     // Find a peer for read only operations and update its lamport time if needed
     pub fn find_peer_with_lamport_time_update(
         &mut self,
-        id: P,
+        id: &P,
         time: LamportTime,
     ) -> Result<DAGPeer<P, PK>> {
-        match self.peers.iter_mut().find(|x| x.id == id) {
+        match self.peers.iter_mut().find(|x| x.id == *id) {
             None => Err(Error::NoneError.into()),
             Some(p_ref) => {
                 if p_ref.lamport_time < time {
@@ -319,8 +319,8 @@ where
     }
 
     // Find a peer for read/write operations
-    pub(crate) fn find_peer_mut(&mut self, id: P) -> Result<&mut DAGPeer<P, PK>> {
-        match self.peers.iter_mut().find(|x| x.id == id) {
+    pub(crate) fn find_peer_mut(&mut self, id: &P) -> Result<&mut DAGPeer<P, PK>> {
+        match self.peers.iter_mut().find(|x| x.id == *id) {
             None => Err(Error::NoneError.into()),
             Some(p_ref) => Ok(p_ref),
         }
