@@ -18,34 +18,42 @@ before_cache:
   - rm -rf /home/travis/.cargo/registry
 before_script:
   - |
+    if [ "$TRAVIS_RUST_VERSION" = 'nightly' ]; then
+       printf -v RUSTFMT_VERSION '%s%s' '-' "$(curl https://rust-lang.github.io/rustup-components-history/x86_64-unknown-linux-gnu/rustfmt)"
+       rustup default "${TRAVIS_RUST_VERSION}${RUSTFMT_VERSION}"
+    fi
     if command -v cargo >/dev/null; then
-      export PATH=$HOME/.cargo/bin:$PATH
-      mkdir $(pwd)/socket
+      export PATH="$HOME/.cargo/bin:$PATH"
+      mkdir "$(pwd)"/socket
       export XDG_RUNTIME_DIR="$(pwd)/socket"
       cargo fetch
-      rustup component add rustfmt-preview
-      if [ -n "$CLIPPY" ]; then
-        rustup component add clippy
-      fi
+    fi
+    if [ -n "$CLIPPY" ]; then
+      rustup component add clippy --toolchain "${TRAVIS_RUST_VERSION}${RUSTFMT_VERSION}"
+    elif [ -n "$BUILD_FMT" ]; then
+      rustup component add rustfmt --toolchain "${TRAVIS_RUST_VERSION}${RUSTFMT_VERSION}"
     fi
 script:
   - |
     if [ -n "$BUILD_FMT" ]; then
       cargo fmt --all -- --check
-      rustfmt --check src/*.rs
+      # rustfmt --check "$(find -name '*.rs' -not -path './target/*')"
     elif [ -n "$CLIPPY" ]; then
       cargo clippy --all -- -D warnings \
-        -A clippy::deprecated_cfg_attr \
-        -A clippy::for_loop_over_option
+                   -A clippy::deprecated_cfg_attr \
+                   -A clippy::for_loop_over_option
     elif [ -n "$CARGO_TEST" ]; then
       cargo test --all --features "$FEATURES"
     fi
 
 matrix:
   include:
-    - env: BUILD_FMT=1
-    - env: CLIPPY=1
-    - env: CARGO_TEST=1
+    - rust: nightly
+      env: BUILD_FMT=1
+    - rust: nightly
+      env: CLIPPY=1
+    - rust: nightly
+      env: CARGO_TEST=1
       notifications:
         slack:
           secure: 'UzMDp+QAQmykQRh3X2zPZnxICvEH9YPynCPQ6AEsmdVb9Or3VleaYM8i+E7x5jT1HFloBJyI1G0mqrFQIbYDQug5nFUsfB2CYi7L0dpUtvoWbDMGoJ/lDI/wJDt64lqhHf9hs1aeYq454Zqcmx6/oKCgnRSyXip6y/mtOlQYjwhGN0D+TARF+6IohqJMg5iEQg4sWvugVur3GbFbatNeevLOYuhezdun4S8vhzQKsFJBK5QnIuufEyeHHjA3Ii5/yyqXUnxtRnLctjPWR+EROBO/mgqBUXPTwheiYqg9Gw9lYSRuBrtP+eixSKWnknju12YzlhAIF/HegRGzLG2PUGgLuB0TBAraaLYOODpBanVfN7DMvhg72Embdy0lZzVYPN8ImwGIU7jisWPI3x6Zz3zdI1lXZaMFS2ijlbRbYZE1YoOhS0iFQuYUc4dwu+D9Ql+IqZZ+BwE5AOy3cY149WrwGX0xaqwPad80HNHy5PUKKLxE8ZLXD0AQsWxi5M7UrHvJ7XOMRPEkskm6zNBuSXrU1vRibbtOaAC+xdPWop5j0Chf99CuIyH6NeqWVwpvl8ddTJGFZeoNXBXOp6+WAxyAJa1Z77rOvmjhdgrvcFh0o3176KCpFBQM0rWt1IVy1LFFsCP9KzMjBN1vAeEaCJZF0yQjXg/58lUTnR5a28A='
@@ -55,27 +63,27 @@ matrix:
       python:
         - '3.7'
       env:
-        - COMMENT_EXTRACTION=comment-extraction-master
-        - EXTRACTED_DIR=docs/extracted-comments
-        - INPUT_DIR=fantom-common-rs/src
-        - LANGUAGE=rust
-        - ROOT_URL=https://github.com/Fantom-Foundation/fantom-common-rs
+        - COMMENT_EXTRACTION='comment-extraction-master'
+        - EXTRACTED_DIR='docs/extracted-comments'
+        - INPUT_DIR='libconsensus-dag/src'
+        - LANGUAGE='rust'
+        - ROOT_URL='https://github.com/Fantom-Foundation/libconsensus-dag'
       before_install:
         - curl -L https://github.com/dev10/comment-extraction/archive/master.tar.gz -o
           comment-extraction.tgz
         - tar xf comment-extraction.tgz
       install:
-        - pip install -r $COMMENT_EXTRACTION/requirements.txt
+        - pip install -r "$COMMENT_EXTRACTION"/requirements.txt
       script:
         - >
-          python $COMMENT_EXTRACTION/antlr.py
-          -l $LANGUAGE
-          -o $EXTRACTED_DIR
-          -ct $TRAVIS_COMMIT
-          -ru $ROOT_URL
-          -d $INPUT_DIR
+          python "$COMMENT_EXTRACTION"/antlr.py
+          -l "$LANGUAGE"
+          -o "$EXTRACTED_DIR"
+          -ct "$TRAVIS_COMMIT"
+          -ru "$ROOT_URL"
+          -d "$INPUT_DIR"
       after_success:
         - cd docs/
         - pip install -r requirements.txt
         - make html
-        - "./deploy.sh"
+        - ./deploy.sh
