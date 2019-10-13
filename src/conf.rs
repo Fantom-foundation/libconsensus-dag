@@ -24,7 +24,7 @@ where
     // heartbeat duration in milliseconds
     pub heartbeat: u64,
     pub(crate) waker: Option<Waker>,
-    pub(crate) peers: DAGPeerList<P, PK>,
+    pub peers: DAGPeerList<P, PK>,
     pub creator: P,
     pub secret_key: SK,
     phantom: PhantomData<Data>,

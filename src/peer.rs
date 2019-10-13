@@ -16,7 +16,7 @@ pub(crate) type FrameNumber = usize;
 pub(crate) type Height = usize;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub(crate) struct Gossip {
+pub struct Gossip {
     pub(crate) lamport_time: LamportTime,
     pub(crate) height: Height,
 }
@@ -141,7 +141,7 @@ where
     }
 }
 
-pub(crate) struct DAGPeerList<P, PK>
+pub struct DAGPeerList<P, PK>
 where
     P: PeerId,
     PK: PublicKey,
@@ -238,6 +238,11 @@ where
     P: PeerId,
     PK: PublicKey,
 {
+    pub fn new_with_content(peers: Vec<DAGPeer<P, PK>>) -> Self {
+        let mut n = DAGPeerList::new();
+        n.peers = peers;
+        n
+    }
     fn peers_mut(&mut self) -> &mut Vec<DAGPeer<P, PK>> {
         &mut self.peers
     }
