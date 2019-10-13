@@ -8,11 +8,12 @@ extern crate serde_derive;
 #[macro_use]
 extern crate log;
 extern crate libconsensus;
-use crate::conf::DAGconfig;
+pub use crate::conf::DAGconfig;
 use crate::core::DAGcore;
 use crate::errors::{Error, Result};
 use crate::event::Event;
-use crate::peer::DAGPeerList;
+pub use crate::peer::DAGPeer;
+pub use crate::peer::DAGPeerList;
 use crate::peer::FrameNumber;
 use crate::peer::GossipList;
 use crate::sync::{SyncReply, SyncReq};
