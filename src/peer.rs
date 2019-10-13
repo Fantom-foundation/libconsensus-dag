@@ -141,6 +141,7 @@ where
     }
 }
 
+#[derive(Clone)]
 pub struct DAGPeerList<P, PK>
 where
     P: PeerId,
