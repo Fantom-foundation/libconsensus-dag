@@ -38,21 +38,18 @@ where
     fn new(base_path: &str) -> Result<SledStore> {
         let event_config = sled::Config::new()
             .path(Path::new(base_path).join("events").as_path())
-            .print_profile_on_drop(true) // if true, gives summary of latency historgrams
-            .build();
+            .print_profile_on_drop(true);
         let ft_config = sled::Config::new()
             .path(Path::new(base_path).join("flag_tables").as_path())
-            .print_profile_on_drop(true) // if true, gives summary of latency historgrams
-            .build();
+            .print_profile_on_drop(true); // if true, gives summary of latency historgrams
         let frame_config = sled::Config::new()
             .path(Path::new(base_path).join("frames").as_path())
-            .print_profile_on_drop(true) // if true, gives summary of latency historgrams
-            .build();
+            .print_profile_on_drop(true); // if true, gives summary of latency historgrams
 
         Ok(SledStore {
-            event: sled::Db::start(event_config)?,
-            flag_table: sled::Db::start(ft_config)?,
-            frame: sled::Db::start(frame_config)?,
+            event: event_config.open()?,
+            flag_table: ft_config.open()?,
+            frame: frame_config.open()?,
             sync: true, // let be synchronous in writing, though it's slow
         })
     }
