@@ -76,7 +76,7 @@ where
         self.lamport_time
     }
     pub(crate) fn get_next_lamport_time(&mut self) -> LamportTime {
-        self.lamport_time = self.lamport_time + 1;
+        self.lamport_time += 1;
         self.lamport_time
     }
     pub(crate) fn add_transaction(&mut self, data: Data) -> BaseResult<()> {
@@ -136,8 +136,8 @@ where
     }
     pub(crate) fn insert_event(&mut self, mut event: Event<Data, P, PK, Sig>) -> Result<bool> {
         let event_hash = event.event_hash()?;
-        let self_parent = event.self_parent.clone();
-        let other_parent = event.other_parent.clone();
+        let self_parent = event.self_parent;
+        let other_parent = event.other_parent;
         let (self_parent_event, other_parent_event, self_parent_ft, other_parent_ft) = {
             let store = self.store.read().unwrap();
             (
@@ -148,35 +148,35 @@ where
             )
         };
         let root: bool; // = false;
-        let frame: FrameNumber; // = FrameNumber::default();
-        if self_parent_event.frame_number == other_parent_event.frame_number {
-            let root_flag_table = strict_merge_flag_table(
-                &self_parent_ft,
-                &other_parent_ft,
-                self_parent_event.frame_number,
-            );
-            let creator_root_flag_table = {
-                let store = self.store.read().unwrap();
-                store.derive_creator_flag_table(&root_flag_table)
-            };
-            let root_majority = {
-                let conf = self.conf.read().unwrap();
-                conf.peers.root_majority()
-            };
-            if creator_root_flag_table.len() >= root_majority {
-                root = true;
-                frame = self_parent_event.frame_number + 1;
-            } else {
+        let frame: FrameNumber /* FrameNumber::default() */ =
+            if self_parent_event.frame_number == other_parent_event.frame_number {
+                let root_flag_table = strict_merge_flag_table(
+                    &self_parent_ft,
+                    &other_parent_ft,
+                    self_parent_event.frame_number,
+                );
+                let creator_root_flag_table = {
+                    let store = self.store.read().unwrap();
+                    store.derive_creator_flag_table(&root_flag_table)
+                };
+                let root_majority = {
+                    let conf = self.conf.read().unwrap();
+                    conf.peers.root_majority()
+                };
+                if creator_root_flag_table.len() >= root_majority {
+                    root = true;
+                    self_parent_event.frame_number + 1
+                } else {
+                    root = false;
+                    self_parent_event.frame_number
+                }
+            } else if self_parent_event.frame_number > other_parent_event.frame_number {
                 root = false;
-                frame = self_parent_event.frame_number;
-            }
-        } else if self_parent_event.frame_number > other_parent_event.frame_number {
-            root = false;
-            frame = self_parent_event.frame_number;
-        } else {
-            root = true;
-            frame = other_parent_event.frame_number;
-        }
+                self_parent_event.frame_number
+            } else {
+                root = true;
+                other_parent_event.frame_number
+            };
         event.frame_number = frame;
         let first_not_finalised_frame = match self.last_finalised_frame {
             Some(x) => x + 1,

@@ -125,7 +125,7 @@ where
         }
     }
     pub(crate) fn get_next_height(&mut self) -> Height {
-        self.height = self.height + 1;
+        self.height += 1;
         self.height
     }
     pub(crate) fn get_height(&self) -> Height {

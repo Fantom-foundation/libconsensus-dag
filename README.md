@@ -24,6 +24,8 @@ $ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default
 $ cargo install --force cargo-make
 # Install rustfmt (Rust formatter)
 $ rustup component add rustfmt
+# Install clippy (Rust linter)
+$ rustup component add clippy
 # Clone this repo
 $ git clone https://github.com/Fantom-foundation/libconsensus-dag && cd libconsensus-dag
 # Run tests
