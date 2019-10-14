@@ -66,7 +66,7 @@ where
     PK: PublicKey,
 {
     fn new() -> Self {
-        return DAGconfig {
+        DAGconfig {
             request_addr: "localhost:9000".to_string(),
             reply_addr: "localhost:12000".to_string(),
             heartbeat: 1000,
@@ -78,6 +78,6 @@ where
             creator: Default::default(),
             secret_key: SK::default(),
             phantom: PhantomData,
-        };
+        }
     }
 }

@@ -89,7 +89,7 @@ where
     Sig: Signature<Hash = EventHash, PublicKey = PK>,
 {
     fn from(ev: Event<Data, P, PK, Sig>) -> HashEvent<Data, P, PK> {
-        return HashEvent {
+        HashEvent {
             creator: ev.creator,
             height: ev.height,
             self_parent: ev.self_parent,
@@ -97,7 +97,7 @@ where
             lamport_timestamp: ev.lamport_timestamp,
             transactions: ev.transactions,
             internal_transactions: ev.internal_transactions,
-        };
+        }
     }
 }
 
@@ -108,7 +108,7 @@ where
     Sig: Signature<Hash = EventHash, PublicKey = PK>,
 {
     fn from(ev: Event<Data, P, PK, Sig>) -> NetEvent<Data, P, PK, Sig> {
-        return NetEvent {
+        NetEvent {
             creator: ev.creator,
             height: ev.height,
             self_parent: ev.self_parent,
@@ -117,7 +117,7 @@ where
             transactions: ev.transactions,
             internal_transactions: ev.internal_transactions,
             signatures: ev.signatures,
-        };
+        }
     }
 }
 
@@ -162,7 +162,7 @@ where
         transactions: Vec<Data>,
         internal_transactions: Vec<InternalTransaction<P, PK>>,
     ) -> Self {
-        let event = Event {
+        Event {
             creator,
             height,
             self_parent,
@@ -173,8 +173,7 @@ where
             hash: EventHash::default(),
             signatures: HashMap::new(),
             frame_number: FrameNumber::default(),
-        };
-        event
+        }
     }
     pub(crate) fn get_creator(&self) -> P {
         self.creator.clone()
