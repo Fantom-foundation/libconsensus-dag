@@ -259,12 +259,10 @@ where
                 } else {
                     Ordering::Less
                 }
+            } else if b_cmp {
+                Ordering::Greater
             } else {
-                if b_cmp {
-                    Ordering::Greater
-                } else {
-                    Ordering::Equal
-                }
+                Ordering::Equal
             }
         })
     }

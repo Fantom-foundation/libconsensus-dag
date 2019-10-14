@@ -388,13 +388,13 @@ where
         //        let configB = Arc::clone(&cfg_mutexed);
         let core_b = core.clone();
         let proc_b_handle = thread::spawn(|| procedure_b(core_b));
-        return Ok(DAG {
+        Ok(DAG {
             core,
             quit_tx: tx,
             listener_handle: Some(handle),
             proc_a_handle: Some(proc_a_handle),
             proc_b_handle: Some(proc_b_handle),
-        });
+        })
     }
 
     // Terminates procedures A and B of DAG0 started with run() method.
