@@ -54,6 +54,9 @@ where
     pub fn get_creator(&self) -> P {
         self.creator.clone()
     }
+    pub fn get_secret_key(&self) -> SK {
+        self.secret_key.clone()
+    }
     pub fn check_quit(&mut self) -> bool {
         self.shutdown
     }
