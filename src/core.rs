@@ -25,7 +25,7 @@ where
     P: PeerId,
     SK: SecretKey,
     PK: PublicKey,
-    Sig: Signature<Hash = EventHash, PublicKey = PK>,
+    Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK>,
 {
     pub(crate) conf: Arc<RwLock<DAGconfig<P, Data, SK, PK>>>,
     pub(crate) store: Arc<RwLock<dyn DAGstore<Data, P, PK, Sig>>>,
@@ -44,7 +44,7 @@ where
     Data: DataType,
     SK: SecretKey,
     PK: PublicKey,
-    Sig: Signature<Hash = EventHash, PublicKey = PK>,
+    Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK>,
 {
     /// Defines maximum number of transactions in a single event
     const TRANSACTIONS_LIMIT: usize = 16000;
@@ -187,10 +187,16 @@ where
         if root {
             visibilis_flag_table.insert(event_hash.clone(), frame);
         }
-        {
-            let mut store = self.store.write().unwrap();
-            store.set_flag_table(&event_hash, &visibilis_flag_table)?;
-        }
+        self.store
+            .write()
+            .unwrap()
+            .set_flag_table(&event_hash, &visibilis_flag_table)?;
+        let signature = Sig::sign(event_hash, self.conf.read().unwrap().get_secret_key())?;
+        event
+            .signatures
+            .insert(self.conf.read().unwrap().peers.get_creator_id(), signature);
+
+        self.store.write().unwrap().set_event(event)?;
         let creator_visibilis_flag_table = {
             let store = self.store.read().unwrap();
             store.derive_creator_flag_table(&visibilis_flag_table)
@@ -208,7 +214,6 @@ where
                 }
             }
         }
-        self.store.write().unwrap().set_event(event)?;
         Ok(true)
     }
 }

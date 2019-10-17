@@ -50,7 +50,7 @@ where
     P: PeerId,
     SK: SecretKey,
     PK: PublicKey,
-    Sig: Signature<Hash = EventHash, PublicKey = PK>,
+    Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK>,
 {
     //    conf: Arc<Mutex<DAGconfig<P, T>>>,
     core: Arc<RwLock<DAGcore<P, T, SK, PK, Sig>>>,
@@ -76,7 +76,7 @@ fn listener<P, Data: 'static, SK, PK, Sig>(
     P: PeerId,
     SK: SecretKey,
     PK: PublicKey,
-    Sig: Signature<Hash = EventHash, PublicKey = PK>,
+    Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK>,
 {
     let config = { core.read().unwrap().conf.clone() };
     // FIXME: what we do with unwrap() in threads?
@@ -104,7 +104,7 @@ where
     P: PeerId + 'static,
     SK: SecretKey,
     PK: PublicKey + 'static,
-    Sig: Signature<Hash = EventHash, PublicKey = PK> + 'static,
+    Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK> + 'static,
 {
     let config = { core.read().unwrap().conf.clone() };
     let mut ticker = {
@@ -270,7 +270,7 @@ where
     P: PeerId + 'static,
     SK: SecretKey,
     PK: PublicKey + 'static,
-    Sig: Signature<Hash = EventHash, PublicKey = PK> + 'static,
+    Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK> + 'static,
 {
     let config = { core.read().unwrap().conf.clone() };
     let (transport_type, request_bind_address) = {
@@ -347,7 +347,7 @@ where
     D: DataType + 'static,
     SK: SecretKey + 'static,
     PK: PublicKey + 'static,
-    Sig: Signature<Hash = EventHash, PublicKey = PK> + 'static,
+    Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK> + 'static,
 {
     type Configuration = DAGconfig<P, D, SK, PK>;
 
@@ -415,7 +415,7 @@ where
     P: PeerId,
     SK: SecretKey,
     PK: PublicKey,
-    Sig: Signature<Hash = EventHash, PublicKey = PK>,
+    Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK>,
 {
     fn drop(&mut self) {
         self.quit_tx.send(()).unwrap();
@@ -443,7 +443,7 @@ where
     P: PeerId,
     SK: SecretKey,
     PK: PublicKey,
-    Sig: Signature<Hash = EventHash, PublicKey = PK>,
+    Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK>,
 {
     // send internal transaction
     fn send_internal_transaction(&mut self, tx: InternalTransaction<P, PK>) -> Result<()> {
@@ -458,7 +458,7 @@ where
     P: PeerId,
     SK: SecretKey,
     PK: PublicKey,
-    Sig: Signature<Hash = EventHash, PublicKey = PK>,
+    Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK>,
 {
 }
 
@@ -468,7 +468,7 @@ where
     Data: DataType,
     SK: SecretKey,
     PK: PublicKey,
-    Sig: Signature<Hash = EventHash, PublicKey = PK>,
+    Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK>,
 {
     type Item = Data;
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
