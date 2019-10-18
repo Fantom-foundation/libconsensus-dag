@@ -532,14 +532,6 @@ where
     }
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
-
 mod conf;
 mod core;
 mod errors;
@@ -552,3 +544,39 @@ mod store;
 mod store_sled;
 mod sync;
 mod transactions;
+
+#[cfg(test)]
+mod tests {
+    pub use crate::peer::DAGPeerList;
+    use libcommon_rs::peer::PeerList;
+    pub use crate::peer::DAGPeer;
+    use libcommon_rs::peer::Peer;
+    use libhash_sha3::Hash as EventHash;
+    use libsignature::Signature as LibSignature;
+    use libsignature_ed25519_dalek::{PublicKey, SecretKey, Signature};
+    type Id = PublicKey;
+
+    #[test]
+    fn test_initialise_network() {
+        let kp1 = Signature::<EventHash>::generate_key_pair().unwrap();
+        let kp2 = Signature::<EventHash>::generate_key_pair().unwrap();
+        let kp3 = Signature::<EventHash>::generate_key_pair().unwrap();
+        let kp4 = Signature::<EventHash>::generate_key_pair().unwrap();
+        let kp5 = Signature::<EventHash>::generate_key_pair().unwrap();
+
+        let mut peer_list = DAGPeerList::<Id, PublicKey>::default();
+        let peer1 = DAGPeer::<Id, PublicKey>::new(kp1.0, "127.0.0.1:9001".to_string());
+        let peer2 = DAGPeer::<Id, PublicKey>::new(kp2.0, "127.0.0.1:9002".to_string());
+        let peer3 = DAGPeer::<Id, PublicKey>::new(kp3.0, "127.0.0.1:9003".to_string());
+        let peer4 = DAGPeer::<Id, PublicKey>::new(kp4.0, "127.0.0.1:9004".to_string());
+        let peer5 = DAGPeer::<Id, PublicKey>::new(kp5.0, "127.0.0.1:9005".to_string());
+
+        peer_list.add(peer1);
+        peer_list.add(peer2);
+        peer_list.add(peer3);
+        peer_list.add(peer4);
+        peer_list.add(peer5);
+
+        
+    }
+}
