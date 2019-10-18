@@ -547,14 +547,33 @@ mod transactions;
 
 #[cfg(test)]
 mod tests {
-    pub use crate::peer::DAGPeerList;
-    use libcommon_rs::peer::PeerList;
+    use crate::conf::DAGconfig;
+    use crate::libconsensus::Consensus;
+    use crate::libconsensus::ConsensusConfiguration;
     pub use crate::peer::DAGPeer;
+    pub use crate::peer::DAGPeerList;
+    use crate::DAG;
+    use core::fmt::Display;
+    use core::fmt::Formatter;
     use libcommon_rs::peer::Peer;
+    use libcommon_rs::peer::PeerList;
     use libhash_sha3::Hash as EventHash;
     use libsignature::Signature as LibSignature;
     use libsignature_ed25519_dalek::{PublicKey, SecretKey, Signature};
+    use serde::{Deserialize, Serialize};
     type Id = PublicKey;
+    #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Serialize, Deserialize, Hash)]
+    struct Data {
+        byte: i8,
+    }
+
+    impl Display for Data {
+        fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
+            let mut formatted = String::new();
+            formatted.push_str(&self.byte.to_string());
+            write!(f, "{}", formatted)
+        }
+    }
 
     #[test]
     fn test_initialise_network() {
@@ -565,18 +584,26 @@ mod tests {
         let kp5 = Signature::<EventHash>::generate_key_pair().unwrap();
 
         let mut peer_list = DAGPeerList::<Id, PublicKey>::default();
-        let peer1 = DAGPeer::<Id, PublicKey>::new(kp1.0, "127.0.0.1:9001".to_string());
-        let peer2 = DAGPeer::<Id, PublicKey>::new(kp2.0, "127.0.0.1:9002".to_string());
-        let peer3 = DAGPeer::<Id, PublicKey>::new(kp3.0, "127.0.0.1:9003".to_string());
-        let peer4 = DAGPeer::<Id, PublicKey>::new(kp4.0, "127.0.0.1:9004".to_string());
-        let peer5 = DAGPeer::<Id, PublicKey>::new(kp5.0, "127.0.0.1:9005".to_string());
+        let peer1 = DAGPeer::<Id, PublicKey>::new(kp1.0.clone(), "127.0.0.1:9001".to_string());
+        let peer2 = DAGPeer::<Id, PublicKey>::new(kp2.0.clone(), "127.0.0.1:9002".to_string());
+        let peer3 = DAGPeer::<Id, PublicKey>::new(kp3.0.clone(), "127.0.0.1:9003".to_string());
+        let peer4 = DAGPeer::<Id, PublicKey>::new(kp4.0.clone(), "127.0.0.1:9004".to_string());
+        let peer5 = DAGPeer::<Id, PublicKey>::new(kp5.0.clone(), "127.0.0.1:9005".to_string());
 
-        peer_list.add(peer1);
-        peer_list.add(peer2);
-        peer_list.add(peer3);
-        peer_list.add(peer4);
-        peer_list.add(peer5);
+        peer_list.add(peer1).unwrap();
+        peer_list.add(peer2).unwrap();
+        peer_list.add(peer3).unwrap();
+        peer_list.add(peer4).unwrap();
+        peer_list.add(peer5).unwrap();
 
-        
+        let mut consensus_config = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
+        consensus_config.transport_type = libtransport::TransportType::TCP;
+        consensus_config.store_type = crate::store::StoreType::Sled;
+        consensus_config.creator = kp1.0;
+        consensus_config.secret_key = kp1.1;
+        consensus_config.peers = peer_list.clone();
+
+        let DAG =
+            DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config);
     }
 }
