@@ -4,3 +4,4 @@
 \#*\#
 Cargo.lock
 .idea
+/sled_store
