@@ -8,7 +8,9 @@ extern crate failure;
 extern crate serde_derive;
 #[macro_use]
 extern crate log;
+extern crate env_logger;
 extern crate libconsensus;
+extern crate syslog;
 pub use crate::conf::DAGconfig;
 use crate::core::DAGcore;
 use crate::errors::{Error, Result};
@@ -382,13 +384,22 @@ where
         //        let cfg_mutexed = Arc::new(Mutex::new(cfg));
         //        let config = Arc::clone(&cfg_mutexed);
         let listener_core = core.clone();
-        let handle = thread::Builder::new().name("listener".to_string()).stack_size(1 * 1024 * 1024).spawn(|| listener(listener_core, rx))?;
+        let handle = thread::Builder::new()
+            .name("listener".to_string())
+            .stack_size(1 * 1024 * 1024)
+            .spawn(|| listener(listener_core, rx))?;
         //        let configA = Arc::clone(&cfg_mutexed);
         let core_a = core.clone();
-        let proc_a_handle = thread::Builder::new().name("procedure_a".to_string()).stack_size(4 * 1024 * 1024).spawn(|| procedure_a(core_a))?;
+        let proc_a_handle = thread::Builder::new()
+            .name("procedure_a".to_string())
+            .stack_size(4 * 1024 * 1024)
+            .spawn(|| procedure_a(core_a))?;
         //        let configB = Arc::clone(&cfg_mutexed);
         let core_b = core.clone();
-        let proc_b_handle = thread::Builder::new().name("procedure_b".to_string()).stack_size(1024 * 1024 * 1024).spawn(|| procedure_b(core_b))?;
+        let proc_b_handle = thread::Builder::new()
+            .name("procedure_b".to_string())
+            .stack_size(1024 * 1024 * 1024)
+            .spawn(|| procedure_b(core_b))?;
         Ok(DAG {
             core,
             quit_tx: tx,
@@ -579,15 +590,21 @@ mod tests {
     }
 
     impl From<i8> for Data {
-        fn from (i: i8) -> Data {
-            Data {
-                byte: i,
-            }
+        fn from(i: i8) -> Data {
+            Data { byte: i }
         }
     }
 
     #[test]
     fn test_initialise_network() {
+        env_logger::init();
+//        syslog::init(
+//            syslog::Facility::LOG_USER,
+//            log::LevelFilter::Debug,
+//            Some("test"),
+//        )
+//        .unwrap();
+
         let kp1 = Signature::<EventHash>::generate_key_pair().unwrap();
         let kp2 = Signature::<EventHash>::generate_key_pair().unwrap();
         let kp3 = Signature::<EventHash>::generate_key_pair().unwrap();
@@ -687,7 +704,7 @@ mod tests {
         DAG5.send_transaction(data[4].clone()).unwrap();
         println!("d5 transaction sent");
 
-        let mut res1: [Data; 5] = [ 0.into(); 5];
+        let mut res1: [Data; 5] = [0.into(); 5];
 
         block_on(async {
             res1 = [
@@ -816,12 +833,13 @@ mod tests {
                 Some(d) => assert_eq!(d, res1[4]),
                 None => panic!("unexpected None"),
             };
-
-
         });
 
-            //println!("Result: {:?}", res1);
-            println!("Result: {}, {}, {}, {}, {}", res1[0], res1[1], res1[2], res1[3], res1[4]);
+        //println!("Result: {:?}", res1);
+        println!(
+            "Result: {}, {}, {}, {}, {}",
+            res1[0], res1[1], res1[2], res1[3], res1[4]
+        );
 
         println!("Shutting down DAGs");
     }
