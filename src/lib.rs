@@ -388,7 +388,7 @@ where
         let proc_a_handle = thread::Builder::new().name("procedure_a".to_string()).stack_size(4 * 1024 * 1024).spawn(|| procedure_a(core_a))?;
         //        let configB = Arc::clone(&cfg_mutexed);
         let core_b = core.clone();
-        let proc_b_handle = thread::Builder::new().name("procedure_b".to_string()).stack_size(16 * 1024 * 1024).spawn(|| procedure_b(core_b))?;
+        let proc_b_handle = thread::Builder::new().name("procedure_b".to_string()).stack_size(1024 * 1024 * 1024).spawn(|| procedure_b(core_b))?;
         Ok(DAG {
             core,
             quit_tx: tx,
