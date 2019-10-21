@@ -596,14 +596,74 @@ mod tests {
         peer_list.add(peer4).unwrap();
         peer_list.add(peer5).unwrap();
 
-        let mut consensus_config = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
-        consensus_config.transport_type = libtransport::TransportType::TCP;
-        consensus_config.store_type = crate::store::StoreType::Sled;
-        consensus_config.creator = kp1.0;
-        consensus_config.secret_key = kp1.1;
-        consensus_config.peers = peer_list.clone();
+        let mut consensus_config1 = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
+        consensus_config1.transport_type = libtransport::TransportType::TCP;
+        consensus_config1.store_type = crate::store::StoreType::Sled;
+        consensus_config1.creator = kp1.0;
+        consensus_config1.secret_key = kp1.1;
+        consensus_config1.peers = peer_list.clone();
 
-        let DAG =
-            DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config);
+        let mut consensus_config2 = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
+        consensus_config2.transport_type = libtransport::TransportType::TCP;
+        consensus_config2.store_type = crate::store::StoreType::Sled;
+        consensus_config2.creator = kp2.0;
+        consensus_config2.secret_key = kp2.1;
+        consensus_config2.peers = peer_list.clone();
+
+        let mut consensus_config3 = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
+        consensus_config3.transport_type = libtransport::TransportType::TCP;
+        consensus_config3.store_type = crate::store::StoreType::Sled;
+        consensus_config3.creator = kp3.0;
+        consensus_config3.secret_key = kp3.1;
+        consensus_config3.peers = peer_list.clone();
+
+        let mut consensus_config4 = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
+        consensus_config4.transport_type = libtransport::TransportType::TCP;
+        consensus_config4.store_type = crate::store::StoreType::Sled;
+        consensus_config4.creator = kp4.0;
+        consensus_config4.secret_key = kp4.1;
+        consensus_config4.peers = peer_list.clone();
+
+        let mut consensus_config5 = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
+        consensus_config5.transport_type = libtransport::TransportType::TCP;
+        consensus_config5.store_type = crate::store::StoreType::Sled;
+        consensus_config5.creator = kp5.0;
+        consensus_config5.secret_key = kp5.1;
+        consensus_config5.peers = peer_list.clone();
+
+        let mut DAG1 =
+            DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config1)
+                .unwrap();
+        let mut DAG2 =
+            DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config2)
+                .unwrap();
+        let mut DAG3 =
+            DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config3)
+                .unwrap();
+        let mut DAG4 =
+            DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config4)
+                .unwrap();
+        let mut DAG5 =
+            DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config5)
+                .unwrap();
+
+        let d1 = Data { byte: 1 };
+        let d2 = Data { byte: 2 };
+        let d3 = Data { byte: 3 };
+        let d4 = Data { byte: 4 };
+        let d5 = Data { byte: 5 };
+
+        DAG1.send_transaction(d1).unwrap();
+        println!("d1 transaction sent");
+        DAG2.send_transaction(d2).unwrap();
+        println!("d2 transaction sent");
+        DAG3.send_transaction(d3).unwrap();
+        println!("d3 transaction sent");
+        DAG4.send_transaction(d4).unwrap();
+        println!("d4 transaction sent");
+        DAG5.send_transaction(d5).unwrap();
+        println!("d5 transaction sent");
+
+        println!("Shutting down DAGs");
     }
 }
