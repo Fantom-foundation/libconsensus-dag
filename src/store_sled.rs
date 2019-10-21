@@ -35,15 +35,15 @@ where
     Sig: Signature<Hash = EventHash, PublicKey = PK>,
 {
     // function new() creates a new Sled based Storage
-    fn new(base_path: &str) -> Result<SledStore> {
+    fn new(base_path: String) -> Result<SledStore> {
         let event_config = sled::Config::new()
-            .path(Path::new(base_path).join("events").as_path())
+            .path(Path::new(&base_path).join("events").as_path())
             .print_profile_on_drop(true);
         let ft_config = sled::Config::new()
-            .path(Path::new(base_path).join("flag_tables").as_path())
+            .path(Path::new(&base_path).join("flag_tables").as_path())
             .print_profile_on_drop(true); // if true, gives summary of latency historgrams
         let frame_config = sled::Config::new()
-            .path(Path::new(base_path).join("frames").as_path())
+            .path(Path::new(&base_path).join("frames").as_path())
             .print_profile_on_drop(true); // if true, gives summary of latency historgrams
 
         Ok(SledStore {

@@ -56,7 +56,11 @@ where
                 crate::store::StoreType::Unknown => panic!("unknown DAG store"),
                 crate::store::StoreType::Sled => {
                     // FIXME: we should use a configurable parameter for store location instead of "./sled_store"
-                    <SledStore as DAGstore<Data, P, PK, Sig>>::new("./sled_store").unwrap()
+                    <SledStore as DAGstore<Data, P, PK, Sig>>::new(format!(
+                        "./sled_store/{}",
+                        conf.creator.clone()
+                    ))
+                    .unwrap()
                 }
             }
         };
