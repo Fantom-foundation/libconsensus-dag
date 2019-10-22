@@ -75,7 +75,7 @@ impl From<BaseError> for Error {
 impl PartialEq for Error {
     fn eq(&self, other: &Error) -> bool {
         match *self {
-            Error::NoneError => Error::NoneError == *other,
+            Error::NoneError => *other == Error::NoneError,
             Error::SerdeJson(ref _l) => {
                 // FIXME: serde_json::error::Error has no PartialEq trait implemented
                 false

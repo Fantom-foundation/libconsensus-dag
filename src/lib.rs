@@ -27,6 +27,7 @@ use futures::stream::StreamExt;
 use futures::task::Context;
 use futures::task::Poll;
 use libcommon_rs::data::DataType;
+use libcommon_rs::peer::Peer;
 use libcommon_rs::peer::PeerId;
 use libconsensus::errors::Result as BaseResult;
 use libconsensus::Consensus;
@@ -110,6 +111,7 @@ where
     Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK> + 'static,
 {
     let config = { core.read().unwrap().conf.clone() };
+    thread::sleep_ms(config.read().unwrap().get_proc_a_delay());
     let mut ticker = {
         let cfg = config.read().unwrap();
         async_timer::Interval::platform_new(Duration::from_millis(cfg.heartbeat))
@@ -118,6 +120,11 @@ where
         let cfg = config.read().unwrap();
         (cfg.transport_type.clone(), cfg.reply_addr.clone())
     };
+    let me = reply_bind_address.clone();
+    debug!(
+        "procedure_a, reply_bind_addr: {}",
+        reply_bind_address.clone()
+    );
     // setup TransportSender for Sync Request.
     let mut sync_req_sender = {
         match transport_type {
@@ -143,27 +150,38 @@ where
     };
     // DAG procedure A loop
     loop {
+        debug!("{}: proc_a loop", me.clone());
         // check if shutdown() has been called
         let mut cfg = config.write().unwrap();
+        debug!("{} checking quit condition", me.clone());
         if cfg.check_quit() {
+            debug!("{}: terminating proc_a", me.clone());
             // terminating
             // FIXME: need to be implemented
             break;
         }
         // choose the next peer and send Sync Request to it.
+        debug!("{} getting next peer", me.clone());
         let peer = cfg.peers.next_peer();
         let gossip_list: GossipList<P> = cfg.peers.get_gossip_list();
+        debug!("{} got gossip list", me.clone());
         let request = SyncReq {
-            from: cfg.peers[0].id.clone(), // FIXME: we assume creator is the peer of index 0
+            from: cfg.get_creator(),
             to: peer.id.clone(),
             gossip_list,
             lamport_time: { core.read().unwrap().get_lamport_time() },
         };
+        debug!("{}: created SyncReq", me.clone());
         drop(cfg);
-        match sync_req_sender.send(peer.request_addr, request) {
+        debug!("{}: sending SyncReq to {}", me.clone(), peer.request_addr.clone());
+        match sync_req_sender.send(peer.request_addr.clone(), request) {
             Ok(()) => {}
-            Err(e) => error!("error sending sync request: {:?}", e),
+            Err(e) => error!(
+                "error sending sync request to {}: {:?}",
+                peer.request_addr, e
+            ),
         }
+        debug!("{}: SyncReq sent", me.clone());
 
         // Receive Sync Reply and process it.
         // NB: it may not be from the very same peer we have sent Sync Request above.
@@ -171,7 +189,7 @@ where
             if let Some(sync_reply) = sync_reply_receiver.next().await {
                 debug!(
                     "{} Sync Reply from {}",
-                    sync_reply.to.clone(),
+                    me.clone(),
                     sync_reply.from.clone()
                 );
                 // update Lamport timestamp of the node
@@ -208,61 +226,84 @@ where
         });
 
         // create new event if needed referring remote peer as other-parent
-        {
-            let mut local_core = core.write().unwrap();
-            let creator = local_core.conf.read().unwrap().get_creator();
-            let height = config
+        let mut local_core = core.write().unwrap();
+        let creator = local_core.conf.read().unwrap().get_creator();
+        debug!(
+            "{}: create new event",
+            config
+                .read()
+                .unwrap()
+                .peers
+                .find_peer(&creator)
+                .unwrap()
+                .get_base_addr()
+        );
+        let height = config
+            .write()
+            .unwrap()
+            .peers
+            .find_peer_mut(&creator)
+            .unwrap()
+            .get_next_height();
+        debug!(
+            "heights; self: {}; other: {}",
+            height,
+            config
                 .write()
                 .unwrap()
                 .peers
-                .find_peer_mut(&creator)
+                .find_peer_mut(&peer.id)
                 .unwrap()
-                .get_next_height();
-            let (other_parent_event, self_parent_event) = {
-                let store = local_core.store.read().unwrap();
-                (
-                    store
-                        .get_event_of_creator(
-                            peer.id.clone(),
-                            config
-                                .write()
-                                .unwrap()
-                                .peers
-                                .find_peer_mut(&peer.id)
-                                .unwrap()
-                                .get_height(),
-                        )
-                        .unwrap(),
-                    store
-                        .get_event_of_creator(creator.clone(), height - 1)
-                        .unwrap(),
-                )
-            };
-            let self_parent = self_parent_event.hash;
-            let other_parent = other_parent_event.hash;
-            let lamport_timestamp = local_core.get_next_lamport_time();
-            let transactions = local_core.next_transactions();
-            let internal_transactions = local_core.next_internal_transactions();
-            let mut event: Event<D, P, PK, Sig> = Event::new(
-                creator,
-                height,
-                self_parent,
-                other_parent,
-                lamport_timestamp,
-                transactions,
-                internal_transactions,
-            );
-            let ex = event.event_hash().unwrap();
-            let rc = local_core.insert_event(event).unwrap();
-            if !rc {
-                error!("Error inserting new event {:?}", ex);
-            }
+                .get_height()
+        );
+        let (other_parent_event, self_parent_event) = {
+            let store = local_core.store.read().unwrap();
+            (
+                store
+                    .get_event_of_creator(
+                        peer.id.clone(),
+                        config
+                            .write()
+                            .unwrap()
+                            .peers
+                            .find_peer_mut(&peer.id)
+                            .unwrap()
+                            .get_height(),
+                    )
+                    .unwrap(),
+                store
+                    .get_event_of_creator(creator.clone(), height - 1)
+                    .unwrap(),
+            )
+        };
+        let self_parent = self_parent_event.hash;
+        let other_parent = other_parent_event.hash;
+        let lamport_timestamp = local_core.get_next_lamport_time();
+        let transactions = local_core.next_transactions();
+        let internal_transactions = local_core.next_internal_transactions();
+        let mut event: Event<D, P, PK, Sig> = Event::new(
+            creator.clone(),
+            height,
+            self_parent,
+            other_parent,
+            lamport_timestamp,
+            transactions,
+            internal_transactions,
+        );
+        let ex = event.event_hash().unwrap();
+        let rc = local_core.insert_event(event).unwrap();
+        if !rc {
+            error!("Error inserting new event {:?}", ex);
         }
 
         // wait until hearbeat interval expires
+        debug!(
+            "{}: wait heartbeat expires", me.clone()
+        );
         block_on(async {
             ticker.as_mut().await;
         });
+        debug!("{}: heartbeat finished", me.clone());
     }
 }
 
@@ -280,6 +321,11 @@ where
         let cfg = config.read().unwrap();
         (cfg.transport_type.clone(), cfg.request_addr.clone())
     };
+    let me = request_bind_address.clone();
+    debug!(
+        "procedure_b, request_bind_addr: {}",
+        request_bind_address.clone()
+    );
     let mut sync_req_receiver = {
         match transport_type {
             libtransport::TransportType::TCP => {
@@ -300,12 +346,27 @@ where
     let store = { core.read().unwrap().store.clone() };
     block_on(async {
         while let Some(sync_req) = sync_req_receiver.next().await {
-            debug!("{} Sync request from {}", sync_req.to, sync_req.from);
+            debug!(
+                "{} Sync request from {}",
+                me.clone(),
+                config
+                    .read()
+                    .unwrap()
+                    .peers
+                    .find_peer(&sync_req.from)
+                    .unwrap()
+                    .get_base_addr()
+            );
             {
                 core.write()
                     .unwrap()
                     .update_lamport_time(sync_req.lamport_time);
             }
+            debug!(
+                "{}: lamport time update: {}",
+                me.clone(),
+                core.read().unwrap().get_lamport_time()
+            );
             match store
                 .read()
                 .unwrap()
@@ -313,7 +374,9 @@ where
             {
                 Err(e) => error!("Procedure B: get_events_for_gossip() error: {:?}", e),
                 Ok(events) => {
+                    debug!("{}: got events for gossip", me.clone());
                     let gossip_list: GossipList<P> = config.read().unwrap().peers.get_gossip_list();
+                    debug!("{}: got gossip list", me.clone());
                     let reply = SyncReply::<D, P, PK, Sig> {
                         from: sync_req.to,
                         to: sync_req.from,
@@ -330,11 +393,13 @@ where
                     } {
                         Ok(peer) => {
                             let address = peer.reply_addr.clone();
+                            debug!("{}: sending SyncReply to {}", me.clone(), address.clone());
                             let res = sync_reply_sender.send(address, reply);
                             match res {
                                 Ok(()) => {}
                                 Err(e) => error!("error sendinf sync reply: {:?}", e),
                             }
+                            debug!("{}: SyncReply sent", me.clone());
                         }
                         Err(e) => error!("peer {} find error: {:?}", reply.to, e),
                     }
@@ -398,7 +463,7 @@ where
         let core_b = core.clone();
         let proc_b_handle = thread::Builder::new()
             .name("procedure_b".to_string())
-            .stack_size(1024 * 1024 * 1024)
+            .stack_size(4 * 1024 * 1024 * 1024)
             .spawn(|| procedure_b(core_b))?;
         Ok(DAG {
             core,
@@ -598,12 +663,12 @@ mod tests {
     #[test]
     fn test_initialise_network() {
         env_logger::init();
-//        syslog::init(
-//            syslog::Facility::LOG_USER,
-//            log::LevelFilter::Debug,
-//            Some("test"),
-//        )
-//        .unwrap();
+        //        syslog::init(
+        //            syslog::Facility::LOG_USER,
+        //            log::LevelFilter::Debug,
+        //            Some("test"),
+        //        )
+        //        .unwrap();
 
         let kp1 = Signature::<EventHash>::generate_key_pair().unwrap();
         let kp2 = Signature::<EventHash>::generate_key_pair().unwrap();

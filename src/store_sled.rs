@@ -135,14 +135,19 @@ where
         for (peer, gossip) in gossip.iter() {
             let mut height = gossip.height + 1;
             loop {
+                debug!("get_events_for_gossip: {} height {}", peer, height);
                 let event = match self.get_event_of_creator(peer.clone(), height.clone()) {
                     Err(e) => match e.downcast::<Error>() {
                         Ok(err) => {
-                            if err == Error::NoneError {
-                                break;
-                            } else {
-                                return Err(err.into());
-                            }
+                            //debug!("err: {}", err);
+                            break;
+                            // FIXME: following code crashes with stack overflow panic
+                            //                            if err == Error::NoneError {
+                            //                                debug!("NONE ERROR");
+                            //                                break;
+                            //                            } else {
+                            //                                return Err(err.into());
+                            //                            }
                         }
                         Err(erx) => return Err(erx),
                     },
@@ -153,6 +158,7 @@ where
                 height += 1;
             }
         }
+        debug!("got events for gossip: {}", events.len());
         Ok(events)
     }
 }
