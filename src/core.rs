@@ -9,7 +9,9 @@ use crate::store_sled::SledStore;
 use crate::transactions::InternalTransaction;
 use core::mem::swap;
 use libcommon_rs::data::DataType;
+use libcommon_rs::peer::Peer;
 use libcommon_rs::peer::PeerId;
+use libcommon_rs::peer::PeerList;
 use libconsensus::errors::Error::AtMaxVecCapacity;
 use libconsensus::errors::Result as BaseResult;
 use libhash_sha3::Hash as EventHash;
@@ -18,6 +20,7 @@ use libsignature::SecretKey;
 use libsignature::Signature;
 use std::sync::Arc;
 use std::sync::RwLock;
+use crate::flag_table::FlagTable;
 
 pub(crate) struct DAGcore<P, Data, SK, PK, Sig>
 where
@@ -64,7 +67,7 @@ where
                 }
             }
         };
-        DAGcore {
+        let mut core = DAGcore {
             conf: Arc::new(RwLock::new(conf)),
             store: Arc::new(RwLock::new(store)),
             tx_pool: Vec::with_capacity(1),
@@ -74,7 +77,29 @@ where
             current_event: Some(0),
             current_tx: Some(0),
             last_finalised_frame: None,
+        };
+        // Create leaf events
+        let peers = core.conf.read().unwrap().peers.clone();
+        for peer in peers.iter() {
+            let mut event: Event<Data, P, PK, Sig> = Event::new(
+                peer.get_id(),
+                peer.get_height(),
+                EventHash::default(),
+                EventHash::default(),
+                peer.get_lamport_time(),
+                [].to_vec(),
+                [].to_vec(),
+            );
+            let ex = event.event_hash().unwrap();
+            let mut ft = FlagTable::new();
+            ft.insert(ex.clone(), 0);
+            {
+                let mut store = core.store.write().unwrap();
+                store.set_event(event).unwrap();
+                store.set_flag_table(&ex, &ft).unwrap();
+            }
         }
+        core
     }
     pub(crate) fn get_lamport_time(&self) -> LamportTime {
         self.lamport_time

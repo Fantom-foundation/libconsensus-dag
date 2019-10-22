@@ -1,4 +1,5 @@
 #![feature(try_trait)]
+#![recursion_limit = "1024000"]
 #[global_allocator]
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
@@ -7,7 +8,9 @@ extern crate failure;
 extern crate serde_derive;
 #[macro_use]
 extern crate log;
+extern crate env_logger;
 extern crate libconsensus;
+extern crate syslog;
 pub use crate::conf::DAGconfig;
 use crate::core::DAGcore;
 use crate::errors::{Error, Result};
@@ -24,6 +27,7 @@ use futures::stream::StreamExt;
 use futures::task::Context;
 use futures::task::Poll;
 use libcommon_rs::data::DataType;
+use libcommon_rs::peer::Peer;
 use libcommon_rs::peer::PeerId;
 use libconsensus::errors::Result as BaseResult;
 use libconsensus::Consensus;
@@ -107,6 +111,7 @@ where
     Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK> + 'static,
 {
     let config = { core.read().unwrap().conf.clone() };
+    thread::sleep_ms(config.read().unwrap().get_proc_a_delay());
     let mut ticker = {
         let cfg = config.read().unwrap();
         async_timer::Interval::platform_new(Duration::from_millis(cfg.heartbeat))
@@ -115,6 +120,11 @@ where
         let cfg = config.read().unwrap();
         (cfg.transport_type.clone(), cfg.reply_addr.clone())
     };
+    let me = reply_bind_address.clone();
+    debug!(
+        "procedure_a, reply_bind_addr: {}",
+        reply_bind_address.clone()
+    );
     // setup TransportSender for Sync Request.
     let mut sync_req_sender = {
         match transport_type {
@@ -140,27 +150,38 @@ where
     };
     // DAG procedure A loop
     loop {
+        debug!("{}: proc_a loop", me.clone());
         // check if shutdown() has been called
         let mut cfg = config.write().unwrap();
+        debug!("{} checking quit condition", me.clone());
         if cfg.check_quit() {
+            debug!("{}: terminating proc_a", me.clone());
             // terminating
             // FIXME: need to be implemented
             break;
         }
         // choose the next peer and send Sync Request to it.
+        debug!("{} getting next peer", me.clone());
         let peer = cfg.peers.next_peer();
         let gossip_list: GossipList<P> = cfg.peers.get_gossip_list();
+        debug!("{} got gossip list", me.clone());
         let request = SyncReq {
-            from: cfg.peers[0].id.clone(), // FIXME: we assume creator is the peer of index 0
+            from: cfg.get_creator(),
             to: peer.id.clone(),
             gossip_list,
             lamport_time: { core.read().unwrap().get_lamport_time() },
         };
+        debug!("{}: created SyncReq", me.clone());
         drop(cfg);
-        match sync_req_sender.send(peer.request_addr, request) {
+        debug!("{}: sending SyncReq to {}", me.clone(), peer.request_addr.clone());
+        match sync_req_sender.send(peer.request_addr.clone(), request) {
             Ok(()) => {}
-            Err(e) => error!("error sending sync request: {:?}", e),
+            Err(e) => error!(
+                "error sending sync request to {}: {:?}",
+                peer.request_addr, e
+            ),
         }
+        debug!("{}: SyncReq sent", me.clone());
 
         // Receive Sync Reply and process it.
         // NB: it may not be from the very same peer we have sent Sync Request above.
@@ -168,7 +189,7 @@ where
             if let Some(sync_reply) = sync_reply_receiver.next().await {
                 debug!(
                     "{} Sync Reply from {}",
-                    sync_reply.to.clone(),
+                    me.clone(),
                     sync_reply.from.clone()
                 );
                 // update Lamport timestamp of the node
@@ -205,61 +226,84 @@ where
         });
 
         // create new event if needed referring remote peer as other-parent
-        {
-            let mut local_core = core.write().unwrap();
-            let creator = local_core.conf.read().unwrap().get_creator();
-            let height = config
+        let mut local_core = core.write().unwrap();
+        let creator = local_core.conf.read().unwrap().get_creator();
+        debug!(
+            "{}: create new event",
+            config
+                .read()
+                .unwrap()
+                .peers
+                .find_peer(&creator)
+                .unwrap()
+                .get_base_addr()
+        );
+        let height = config
+            .write()
+            .unwrap()
+            .peers
+            .find_peer_mut(&creator)
+            .unwrap()
+            .get_next_height();
+        debug!(
+            "heights; self: {}; other: {}",
+            height,
+            config
                 .write()
                 .unwrap()
                 .peers
-                .find_peer_mut(&creator)
+                .find_peer_mut(&peer.id)
                 .unwrap()
-                .get_next_height();
-            let (other_parent_event, self_parent_event) = {
-                let store = local_core.store.read().unwrap();
-                (
-                    store
-                        .get_event_of_creator(
-                            peer.id.clone(),
-                            config
-                                .write()
-                                .unwrap()
-                                .peers
-                                .find_peer_mut(&peer.id)
-                                .unwrap()
-                                .get_height(),
-                        )
-                        .unwrap(),
-                    store
-                        .get_event_of_creator(creator.clone(), height - 1)
-                        .unwrap(),
-                )
-            };
-            let self_parent = self_parent_event.hash;
-            let other_parent = other_parent_event.hash;
-            let lamport_timestamp = local_core.get_next_lamport_time();
-            let transactions = local_core.next_transactions();
-            let internal_transactions = local_core.next_internal_transactions();
-            let mut event: Event<D, P, PK, Sig> = Event::new(
-                creator,
-                height,
-                self_parent,
-                other_parent,
-                lamport_timestamp,
-                transactions,
-                internal_transactions,
-            );
-            let ex = event.event_hash().unwrap();
-            let rc = local_core.insert_event(event).unwrap();
-            if !rc {
-                error!("Error inserting new event {:?}", ex);
-            }
+                .get_height()
+        );
+        let (other_parent_event, self_parent_event) = {
+            let store = local_core.store.read().unwrap();
+            (
+                store
+                    .get_event_of_creator(
+                        peer.id.clone(),
+                        config
+                            .write()
+                            .unwrap()
+                            .peers
+                            .find_peer_mut(&peer.id)
+                            .unwrap()
+                            .get_height(),
+                    )
+                    .unwrap(),
+                store
+                    .get_event_of_creator(creator.clone(), height - 1)
+                    .unwrap(),
+            )
+        };
+        let self_parent = self_parent_event.hash;
+        let other_parent = other_parent_event.hash;
+        let lamport_timestamp = local_core.get_next_lamport_time();
+        let transactions = local_core.next_transactions();
+        let internal_transactions = local_core.next_internal_transactions();
+        let mut event: Event<D, P, PK, Sig> = Event::new(
+            creator.clone(),
+            height,
+            self_parent,
+            other_parent,
+            lamport_timestamp,
+            transactions,
+            internal_transactions,
+        );
+        let ex = event.event_hash().unwrap();
+        let rc = local_core.insert_event(event).unwrap();
+        if !rc {
+            error!("Error inserting new event {:?}", ex);
         }
 
         // wait until hearbeat interval expires
+        debug!(
+            "{}: wait heartbeat expires", me.clone()
+        );
         block_on(async {
             ticker.as_mut().await;
         });
+        debug!("{}: heartbeat finished", me.clone());
     }
 }
 
@@ -277,6 +321,11 @@ where
         let cfg = config.read().unwrap();
         (cfg.transport_type.clone(), cfg.request_addr.clone())
     };
+    let me = request_bind_address.clone();
+    debug!(
+        "procedure_b, request_bind_addr: {}",
+        request_bind_address.clone()
+    );
     let mut sync_req_receiver = {
         match transport_type {
             libtransport::TransportType::TCP => {
@@ -297,12 +346,27 @@ where
     let store = { core.read().unwrap().store.clone() };
     block_on(async {
         while let Some(sync_req) = sync_req_receiver.next().await {
-            debug!("{} Sync request from {}", sync_req.to, sync_req.from);
+            debug!(
+                "{} Sync request from {}",
+                me.clone(),
+                config
+                    .read()
+                    .unwrap()
+                    .peers
+                    .find_peer(&sync_req.from)
+                    .unwrap()
+                    .get_base_addr()
+            );
             {
                 core.write()
                     .unwrap()
                     .update_lamport_time(sync_req.lamport_time);
             }
+            debug!(
+                "{}: lamport time update: {}",
+                me.clone(),
+                core.read().unwrap().get_lamport_time()
+            );
             match store
                 .read()
                 .unwrap()
@@ -310,7 +374,9 @@ where
             {
                 Err(e) => error!("Procedure B: get_events_for_gossip() error: {:?}", e),
                 Ok(events) => {
+                    debug!("{}: got events for gossip", me.clone());
                     let gossip_list: GossipList<P> = config.read().unwrap().peers.get_gossip_list();
+                    debug!("{}: got gossip list", me.clone());
                     let reply = SyncReply::<D, P, PK, Sig> {
                         from: sync_req.to,
                         to: sync_req.from,
@@ -327,11 +393,13 @@ where
                     } {
                         Ok(peer) => {
                             let address = peer.reply_addr.clone();
+                            debug!("{}: sending SyncReply to {}", me.clone(), address.clone());
                             let res = sync_reply_sender.send(address, reply);
                             match res {
                                 Ok(()) => {}
                                 Err(e) => error!("error sendinf sync reply: {:?}", e),
                             }
+                            debug!("{}: SyncReply sent", me.clone());
                         }
                         Err(e) => error!("peer {} find error: {:?}", reply.to, e),
                     }
@@ -381,13 +449,22 @@ where
         //        let cfg_mutexed = Arc::new(Mutex::new(cfg));
         //        let config = Arc::clone(&cfg_mutexed);
         let listener_core = core.clone();
-        let handle = thread::spawn(|| listener(listener_core, rx));
+        let handle = thread::Builder::new()
+            .name("listener".to_string())
+            .stack_size(1 * 1024 * 1024)
+            .spawn(|| listener(listener_core, rx))?;
         //        let configA = Arc::clone(&cfg_mutexed);
         let core_a = core.clone();
-        let proc_a_handle = thread::spawn(|| procedure_a(core_a));
+        let proc_a_handle = thread::Builder::new()
+            .name("procedure_a".to_string())
+            .stack_size(4 * 1024 * 1024)
+            .spawn(|| procedure_a(core_a))?;
         //        let configB = Arc::clone(&cfg_mutexed);
         let core_b = core.clone();
-        let proc_b_handle = thread::spawn(|| procedure_b(core_b));
+        let proc_b_handle = thread::Builder::new()
+            .name("procedure_b".to_string())
+            .stack_size(4 * 1024 * 1024 * 1024)
+            .spawn(|| procedure_b(core_b))?;
         Ok(DAG {
             core,
             quit_tx: tx,
@@ -532,14 +609,6 @@ where
     }
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
-
 mod conf;
 mod core;
 mod errors;
@@ -552,3 +621,291 @@ mod store;
 mod store_sled;
 mod sync;
 mod transactions;
+
+#[cfg(test)]
+mod tests {
+    use crate::conf::DAGconfig;
+    use crate::libconsensus::Consensus;
+    use crate::libconsensus::ConsensusConfiguration;
+    pub use crate::peer::DAGPeer;
+    pub use crate::peer::DAGPeerList;
+    use crate::DAG;
+    use core::fmt::Display;
+    use core::fmt::Formatter;
+    use futures::executor::block_on;
+    use futures::stream::StreamExt;
+    use libcommon_rs::peer::Peer;
+    use libcommon_rs::peer::PeerList;
+    use libhash_sha3::Hash as EventHash;
+    use libsignature::Signature as LibSignature;
+    use libsignature_ed25519_dalek::{PublicKey, SecretKey, Signature};
+    use serde::{Deserialize, Serialize};
+    type Id = PublicKey;
+    #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Serialize, Deserialize, Hash, Copy)]
+    struct Data {
+        byte: i8,
+    }
+
+    impl Display for Data {
+        fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
+            let mut formatted = String::new();
+            formatted.push_str(&self.byte.to_string());
+            write!(f, "{}", formatted)
+        }
+    }
+
+    impl From<i8> for Data {
+        fn from(i: i8) -> Data {
+            Data { byte: i }
+        }
+    }
+
+    #[test]
+    fn test_initialise_network() {
+        env_logger::init();
+        //        syslog::init(
+        //            syslog::Facility::LOG_USER,
+        //            log::LevelFilter::Debug,
+        //            Some("test"),
+        //        )
+        //        .unwrap();
+
+        let kp1 = Signature::<EventHash>::generate_key_pair().unwrap();
+        let kp2 = Signature::<EventHash>::generate_key_pair().unwrap();
+        let kp3 = Signature::<EventHash>::generate_key_pair().unwrap();
+        let kp4 = Signature::<EventHash>::generate_key_pair().unwrap();
+        let kp5 = Signature::<EventHash>::generate_key_pair().unwrap();
+
+        let mut peer_list = DAGPeerList::<Id, PublicKey>::default();
+        let peer1 = DAGPeer::<Id, PublicKey>::new(kp1.0.clone(), "127.0.0.1:9001".to_string());
+        let peer2 = DAGPeer::<Id, PublicKey>::new(kp2.0.clone(), "127.0.0.1:9003".to_string());
+        let peer3 = DAGPeer::<Id, PublicKey>::new(kp3.0.clone(), "127.0.0.1:9005".to_string());
+        let peer4 = DAGPeer::<Id, PublicKey>::new(kp4.0.clone(), "127.0.0.1:9007".to_string());
+        let peer5 = DAGPeer::<Id, PublicKey>::new(kp5.0.clone(), "127.0.0.1:9009".to_string());
+
+        peer_list.add(peer1).unwrap();
+        peer_list.add(peer2).unwrap();
+        peer_list.add(peer3).unwrap();
+        peer_list.add(peer4).unwrap();
+        peer_list.add(peer5).unwrap();
+
+        let mut consensus_config1 = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
+        consensus_config1.request_addr = "127.0.0.1:9001".to_string();
+        consensus_config1.reply_addr = "127.0.0.1:9002".to_string();
+        consensus_config1.transport_type = libtransport::TransportType::TCP;
+        consensus_config1.store_type = crate::store::StoreType::Sled;
+        consensus_config1.creator = kp1.0;
+        consensus_config1.secret_key = kp1.1;
+        consensus_config1.peers = peer_list.clone();
+
+        let mut consensus_config2 = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
+        consensus_config2.request_addr = "127.0.0.1:9003".to_string();
+        consensus_config2.reply_addr = "127.0.0.1:9004".to_string();
+        consensus_config2.transport_type = libtransport::TransportType::TCP;
+        consensus_config2.store_type = crate::store::StoreType::Sled;
+        consensus_config2.creator = kp2.0;
+        consensus_config2.secret_key = kp2.1;
+        consensus_config2.peers = peer_list.clone();
+
+        let mut consensus_config3 = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
+        consensus_config3.request_addr = "127.0.0.1:9005".to_string();
+        consensus_config3.reply_addr = "127.0.0.1:9006".to_string();
+        consensus_config3.transport_type = libtransport::TransportType::TCP;
+        consensus_config3.store_type = crate::store::StoreType::Sled;
+        consensus_config3.creator = kp3.0;
+        consensus_config3.secret_key = kp3.1;
+        consensus_config3.peers = peer_list.clone();
+
+        let mut consensus_config4 = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
+        consensus_config4.request_addr = "127.0.0.1:9007".to_string();
+        consensus_config4.reply_addr = "127.0.0.1:9008".to_string();
+        consensus_config4.transport_type = libtransport::TransportType::TCP;
+        consensus_config4.store_type = crate::store::StoreType::Sled;
+        consensus_config4.creator = kp4.0;
+        consensus_config4.secret_key = kp4.1;
+        consensus_config4.peers = peer_list.clone();
+
+        let mut consensus_config5 = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
+        consensus_config5.request_addr = "127.0.0.1:9009".to_string();
+        consensus_config5.reply_addr = "127.0.0.1:9010".to_string();
+        consensus_config5.transport_type = libtransport::TransportType::TCP;
+        consensus_config5.store_type = crate::store::StoreType::Sled;
+        consensus_config5.creator = kp5.0;
+        consensus_config5.secret_key = kp5.1;
+        consensus_config5.peers = peer_list.clone();
+
+        let mut DAG1 =
+            DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config1)
+                .unwrap();
+        let mut DAG2 =
+            DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config2)
+                .unwrap();
+        let mut DAG3 =
+            DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config3)
+                .unwrap();
+        let mut DAG4 =
+            DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config4)
+                .unwrap();
+        let mut DAG5 =
+            DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config5)
+                .unwrap();
+
+        let data: [Data; 5] = [
+            Data { byte: 1 },
+            Data { byte: 2 },
+            Data { byte: 3 },
+            Data { byte: 4 },
+            Data { byte: 5 },
+        ];
+
+        DAG1.send_transaction(data[0].clone()).unwrap();
+        println!("d1 transaction sent");
+        DAG2.send_transaction(data[1].clone()).unwrap();
+        println!("d2 transaction sent");
+        DAG3.send_transaction(data[2].clone()).unwrap();
+        println!("d3 transaction sent");
+        DAG4.send_transaction(data[3].clone()).unwrap();
+        println!("d4 transaction sent");
+        DAG5.send_transaction(data[4].clone()).unwrap();
+        println!("d5 transaction sent");
+
+        let mut res1: [Data; 5] = [0.into(); 5];
+
+        block_on(async {
+            res1 = [
+                match DAG1.next().await {
+                    Some(d) => {
+                        assert_eq!(d, data[0]);
+                        println!("DAG1: data[0] OK");
+                        d
+                    }
+                    None => panic!("unexpected None"),
+                },
+                match DAG1.next().await {
+                    Some(d) => {
+                        assert_eq!(d, data[1]);
+                        d
+                    }
+                    None => panic!("unexpected None"),
+                },
+                match DAG1.next().await {
+                    Some(d) => {
+                        assert_eq!(d, data[2]);
+                        d
+                    }
+                    None => panic!("unexpected None"),
+                },
+                match DAG1.next().await {
+                    Some(d) => {
+                        assert_eq!(d, data[3]);
+                        d
+                    }
+                    None => panic!("unexpected None"),
+                },
+                match DAG1.next().await {
+                    Some(d) => {
+                        assert_eq!(d, data[4]);
+                        d
+                    }
+                    None => panic!("unexpected None"),
+                },
+            ];
+
+            // check DAG2
+            match DAG2.next().await {
+                Some(d) => assert_eq!(d, res1[0]),
+                None => panic!("unexpected None"),
+            };
+            match DAG2.next().await {
+                Some(d) => assert_eq!(d, res1[1]),
+                None => panic!("unexpected None"),
+            };
+            match DAG2.next().await {
+                Some(d) => assert_eq!(d, res1[2]),
+                None => panic!("unexpected None"),
+            };
+            match DAG2.next().await {
+                Some(d) => assert_eq!(d, res1[3]),
+                None => panic!("unexpected None"),
+            };
+            match DAG2.next().await {
+                Some(d) => assert_eq!(d, res1[4]),
+                None => panic!("unexpected None"),
+            };
+
+            // check DAG3
+            match DAG3.next().await {
+                Some(d) => assert_eq!(d, res1[0]),
+                None => panic!("unexpected None"),
+            };
+            match DAG3.next().await {
+                Some(d) => assert_eq!(d, res1[1]),
+                None => panic!("unexpected None"),
+            };
+            match DAG3.next().await {
+                Some(d) => assert_eq!(d, res1[2]),
+                None => panic!("unexpected None"),
+            };
+            match DAG3.next().await {
+                Some(d) => assert_eq!(d, res1[3]),
+                None => panic!("unexpected None"),
+            };
+            match DAG3.next().await {
+                Some(d) => assert_eq!(d, res1[4]),
+                None => panic!("unexpected None"),
+            };
+
+            // check DAG4
+            match DAG4.next().await {
+                Some(d) => assert_eq!(d, res1[0]),
+                None => panic!("unexpected None"),
+            };
+            match DAG4.next().await {
+                Some(d) => assert_eq!(d, res1[1]),
+                None => panic!("unexpected None"),
+            };
+            match DAG4.next().await {
+                Some(d) => assert_eq!(d, res1[2]),
+                None => panic!("unexpected None"),
+            };
+            match DAG4.next().await {
+                Some(d) => assert_eq!(d, res1[3]),
+                None => panic!("unexpected None"),
+            };
+            match DAG4.next().await {
+                Some(d) => assert_eq!(d, res1[4]),
+                None => panic!("unexpected None"),
+            };
+
+            // check DAG5
+            match DAG5.next().await {
+                Some(d) => assert_eq!(d, res1[0]),
+                None => panic!("unexpected None"),
+            };
+            match DAG5.next().await {
+                Some(d) => assert_eq!(d, res1[1]),
+                None => panic!("unexpected None"),
+            };
+            match DAG5.next().await {
+                Some(d) => assert_eq!(d, res1[2]),
+                None => panic!("unexpected None"),
+            };
+            match DAG5.next().await {
+                Some(d) => assert_eq!(d, res1[3]),
+                None => panic!("unexpected None"),
+            };
+            match DAG5.next().await {
+                Some(d) => assert_eq!(d, res1[4]),
+                None => panic!("unexpected None"),
+            };
+        });
+
+        //println!("Result: {:?}", res1);
+        println!(
+            "Result: {}, {}, {}, {}, {}",
+            res1[0], res1[1], res1[2], res1[3], res1[4]
+        );
+
+        println!("Shutting down DAGs");
+    }
+}

@@ -23,6 +23,7 @@ where
     pub store_type: StoreType,
     // heartbeat duration in milliseconds
     pub heartbeat: u64,
+    pub(crate) proc_a_delay: u32,
     pub(crate) waker: Option<Waker>,
     pub peers: DAGPeerList<P, PK>,
     pub creator: P,
@@ -57,6 +58,9 @@ where
     pub fn get_secret_key(&self) -> SK {
         self.secret_key.clone()
     }
+    pub fn get_proc_a_delay(&self) -> u32 {
+        self.proc_a_delay.clone()
+    }
     pub fn check_quit(&mut self) -> bool {
         self.shutdown
     }
@@ -73,6 +77,7 @@ where
             request_addr: "localhost:9000".to_string(),
             reply_addr: "localhost:12000".to_string(),
             heartbeat: 1000,
+            proc_a_delay: 1000,
             shutdown: false,
             transport_type: TransportType::Unknown,
             store_type: StoreType::Unknown,
