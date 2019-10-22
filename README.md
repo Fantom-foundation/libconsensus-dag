@@ -1,38 +1,8 @@
 libconsensus-dag
 ==================
-![Rust: nightly](https://img.shields.io/badge/Rust-nightly-blue.svg) ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg) [![Build Status](https://travis-ci.org/Fantom-foundation/evm-rs.svg?branch=master)](https://travis-ci.org/Fantom-foundation/evm-rs)
+[![Rust: nightly](https://img.shields.io/badge/Rust-nightly-blue.svg)](https://www.rust-lang.org) [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE) [![Build Status](https://travis-ci.org/Fantom-foundation/libconsensus-dag.svg?branch=master)](https://travis-ci.org/Fantom-foundation/libconsensus-dag)
 
 libconsensus-dag in Rust.
-
-## RFCs
-
-https://github.com/Fantom-foundation/fantom-rfcs
-
-# Developer guide
-
-Install the latest version of [Rust](https://www.rust-lang.org). We tend to use nightly versions. [CLI tool for installing Rust](https://rustup.rs).
-
-We use [rust-clippy](https://github.com/rust-lang-nursery/rust-clippy) linters to improve code quality.
-
-There are plenty of [IDEs](https://areweideyet.com) and other [Rust development tools to consider](https://github.com/rust-unofficial/awesome-rust#development-tools).
-
-### Step-by-step guide
-```bash
-# Install Rust (nightly)
-$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain nightly
-# Install cargo-make (cross-platform feature-rich reimplementation of Make)
-$ cargo install --force cargo-make
-# Install rustfmt (Rust formatter)
-$ rustup component add rustfmt
-# Install clippy (Rust linter)
-$ rustup component add clippy
-# Clone this repo
-$ git clone https://github.com/Fantom-foundation/libconsensus-dag && cd libconsensus-dag
-# Run tests
-$ cargo test
-# Format, build and test
-$ cargo make
-```
 
 ## Example
 
@@ -77,9 +47,9 @@ impl From<i8> for Data {
 }
 ```
 
-### Step-by-step
+### Step-by-step example
 
-**Prepare public/secret key for nodes**
+#### Prepare public/secret key for nodes
 ```rust
 let kp1 = Signature::<EventHash>::generate_key_pair().unwrap();
 let kp2 = Signature::<EventHash>::generate_key_pair().unwrap();
@@ -88,7 +58,7 @@ let kp4 = Signature::<EventHash>::generate_key_pair().unwrap();
 let kp5 = Signature::<EventHash>::generate_key_pair().unwrap();
 ```
 
-**Prepare peer list**
+#### Prepare peer list
 ```rust
 let mut peer_list = DAGPeerList::<Id, PublicKey>::default();
 let peer1 = DAGPeer::<Id, PublicKey>::new(kp1.0.clone(), "127.0.0.1:9001".to_string());
@@ -104,7 +74,7 @@ peer_list.add(peer4).unwrap();
 peer_list.add(peer5).unwrap();
 ```
 
-**Create ConsensusConfiguration for every node**
+#### Create Consensus configuration for every node
 ```rust
 let mut consensus_config1 = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
 consensus_config1.request_addr = "127.0.0.1:9001".to_string();
@@ -152,7 +122,7 @@ consensus_config5.secret_key = kp5.1;
 consensus_config5.peers = peer_list.clone();
 ```
 
-** Start every node**
+#### Start every node
 ```rust
 let mut DAG1 =
     DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config1)
@@ -171,7 +141,7 @@ let mut DAG5 =
         .unwrap();
 ```
 
-**Send transactions into Consensus**
+#### Send transactions into Consensus
 ```rust
 let data: [Data; 5] = [
     Data { byte: 1 },
@@ -188,7 +158,7 @@ DAG4.send_transaction(data[3].clone()).unwrap();
 DAG5.send_transaction(data[4].clone()).unwrap();
 ```
 
-**Receive transaction in Consensus**
+#### Receive transaction in Consensus
 ```rust
 block_on(async {
     let data = match DAG1.next().await {
@@ -197,4 +167,37 @@ block_on(async {
     };
     // process `data` here
 });
+```
+
+---
+
+## RFCs
+
+https://github.com/Fantom-foundation/fantom-rfcs
+
+# Developer guide
+
+Install the latest version of [Rust](https://www.rust-lang.org). We tend to use nightly versions. [CLI tool for installing Rust](https://rustup.rs).
+
+We use [rust-clippy](https://github.com/rust-lang-nursery/rust-clippy) linters to improve code quality.
+
+There are plenty of [IDEs](https://areweideyet.com) and other [Rust development tools to consider](https://github.com/rust-unofficial/awesome-rust#development-tools).
+
+### CLI instructions
+
+```bash
+# Install Rust (nightly)
+$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain nightly
+# Install cargo-make (cross-platform feature-rich reimplementation of Make)
+$ cargo install --force cargo-make
+# Install rustfmt (Rust formatter)
+$ rustup component add rustfmt
+# Install clippy (Rust linter)
+$ rustup component add clippy
+# Clone this repo
+$ git clone https://github.com/Fantom-foundation/libconsensus-dag && cd libconsensus-dag
+# Run tests
+$ cargo test
+# Format, build and test
+$ cargo make
 ```
