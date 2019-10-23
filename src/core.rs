@@ -226,10 +226,20 @@ where
             .write()
             .unwrap()
             .set_flag_table(&event_hash, &visibilis_flag_table)?;
-        let signature = Sig::sign(event_hash, self.conf.read().unwrap().get_secret_key())?;
-        event
-            .signatures
-            .insert(self.conf.read().unwrap().peers.get_creator_id(), signature);
+        {
+            let cfg = self.conf.read().unwrap();
+            let signature = Sig::sign(event_hash, cfg.get_public_key(), cfg.get_secret_key())?;
+            event
+                .signatures
+                .insert(cfg.peers.get_creator_id(), signature.clone());
+            debug!(
+                "* insert event: signing hash: {}, creator:{},{}, signature:{}",
+                event_hash,
+                cfg.peers.get_creator_id(),
+                cfg.get_creator(),
+                signature
+            );
+        }
 
         self.store.write().unwrap().set_event(event)?;
         let creator_visibilis_flag_table = {

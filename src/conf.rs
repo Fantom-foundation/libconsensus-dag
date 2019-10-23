@@ -28,6 +28,7 @@ where
     pub peers: DAGPeerList<P, PK>,
     pub creator: P,
     pub secret_key: SK,
+    pub public_key: PK,
     phantom: PhantomData<Data>,
 }
 
@@ -58,6 +59,9 @@ where
     pub fn get_secret_key(&self) -> SK {
         self.secret_key.clone()
     }
+    pub fn get_public_key(&self) -> PK {
+        self.public_key.clone()
+    }
     pub fn get_proc_a_delay(&self) -> u32 {
         self.proc_a_delay.clone()
     }
@@ -85,6 +89,7 @@ where
             peers: DAGPeerList::new(),
             creator: Default::default(),
             secret_key: SK::default(),
+            public_key: PK::default(),
             phantom: PhantomData,
         }
     }

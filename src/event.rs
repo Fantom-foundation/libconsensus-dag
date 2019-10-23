@@ -156,10 +156,15 @@ where
     Sig: Signature<Hash = EventHash, PublicKey = PK>,
 {
     fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
-        write!(f, "creator:{}; height:{}; self-parent:{}; other-parent:{}; lamport_time:{}; hash:{}; frame:{}; signatures: {:?}; transactions: {:#?}.",
+        let mut formatted = String::new();
+        formatted.push_str(&format!("creator:{}; height:{}; self-parent:{}; other-parent:{}; lamport_time:{}; hash:{}; frame:{}; transactions: {:#?}; signatures: ",
         self.creator, self.height, self.self_parent, self.other_parent,
         self.lamport_timestamp, self.hash, self.frame_number,
-        self.signatures, self.transactions)
+        self.transactions));
+        for (signatory, signature) in self.signatures.iter() {
+            formatted.push_str(&format!("({}*{})", signatory, signature));
+        }
+        write!(f, "{}", formatted)
     }
 }
 

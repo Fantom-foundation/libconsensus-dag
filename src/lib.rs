@@ -695,7 +695,8 @@ mod tests {
         consensus_config1.reply_addr = "127.0.0.1:9002".to_string();
         consensus_config1.transport_type = libtransport::TransportType::TCP;
         consensus_config1.store_type = crate::store::StoreType::Sled;
-        consensus_config1.creator = kp1.0;
+        consensus_config1.creator = kp1.0.clone();
+        consensus_config1.public_key = kp1.0;
         consensus_config1.secret_key = kp1.1;
         consensus_config1.peers = peer_list.clone();
 
@@ -704,7 +705,8 @@ mod tests {
         consensus_config2.reply_addr = "127.0.0.1:9004".to_string();
         consensus_config2.transport_type = libtransport::TransportType::TCP;
         consensus_config2.store_type = crate::store::StoreType::Sled;
-        consensus_config2.creator = kp2.0;
+        consensus_config2.creator = kp2.0.clone();
+        consensus_config2.public_key = kp2.0;
         consensus_config2.secret_key = kp2.1;
         consensus_config2.peers = peer_list.clone();
 
@@ -713,7 +715,8 @@ mod tests {
         consensus_config3.reply_addr = "127.0.0.1:9006".to_string();
         consensus_config3.transport_type = libtransport::TransportType::TCP;
         consensus_config3.store_type = crate::store::StoreType::Sled;
-        consensus_config3.creator = kp3.0;
+        consensus_config3.creator = kp3.0.clone();
+        consensus_config3.public_key = kp3.0;
         consensus_config3.secret_key = kp3.1;
         consensus_config3.peers = peer_list.clone();
 
@@ -722,7 +725,8 @@ mod tests {
         consensus_config4.reply_addr = "127.0.0.1:9008".to_string();
         consensus_config4.transport_type = libtransport::TransportType::TCP;
         consensus_config4.store_type = crate::store::StoreType::Sled;
-        consensus_config4.creator = kp4.0;
+        consensus_config4.creator = kp4.0.clone();
+        consensus_config4.public_key = kp4.0;
         consensus_config4.secret_key = kp4.1;
         consensus_config4.peers = peer_list.clone();
 
@@ -731,7 +735,8 @@ mod tests {
         consensus_config5.reply_addr = "127.0.0.1:9010".to_string();
         consensus_config5.transport_type = libtransport::TransportType::TCP;
         consensus_config5.store_type = crate::store::StoreType::Sled;
-        consensus_config5.creator = kp5.0;
+        consensus_config5.creator = kp5.0.clone();
+        consensus_config5.public_key = kp5.0;
         consensus_config5.secret_key = kp5.1;
         consensus_config5.peers = peer_list.clone();
 

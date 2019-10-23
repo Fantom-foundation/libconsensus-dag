@@ -1,6 +1,6 @@
 [package]
 name = "libconsensus-dag"
-version = "0.0.11"
+version = "0.0.12"
 authors = ["Samuel Marks <@SamuelMarks>"]
 edition = "2018"
 
@@ -24,8 +24,8 @@ libcommon-rs = { git = "https://github.com/Fantom-foundation/libcommon-rs" }
 futures-preview = { version = "0.3.0-alpha.19", features = ["compat"] }
 libhash = { git = "https://github.com/Fantom-foundation/libhash" }
 libhash-sha3 = { git = "https://github.com/Fantom-foundation/libhash-sha3", version="0.1.1" }
-libsignature = { git = "https://github.com/Fantom-foundation/libsignature" }
+libsignature = { git = "https://github.com/Fantom-foundation/libsignature", version="0.2.0" }
 failure = "0.1.5"
 
 [dev-dependencies]
-libsignature-ed25519-dalek = { git = "https://github.com/Fantom-foundation/libsignature-ed25519-dalek" }
+libsignature-ed25519-dalek = { git = "https://github.com/Fantom-foundation/libsignature-ed25519-dalek", version="0.2.0" }
