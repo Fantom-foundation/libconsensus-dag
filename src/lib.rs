@@ -246,9 +246,11 @@ where
             .unwrap()
             .get_next_height();
         debug!(
-            "{}: heights; self: {}; other: {}",
+            "{}: heights; self[{}]: {}; other[{}]: {}",
             me.clone(),
+            creator.clone(),
             height,
+            peer.id.clone(),
             config
                 .write()
                 .unwrap()

@@ -1,6 +1,6 @@
 [package]
 name = "libconsensus-dag"
-version = "0.0.10"
+version = "0.0.11"
 authors = ["Samuel Marks <@SamuelMarks>"]
 edition = "2018"
 

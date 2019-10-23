@@ -78,6 +78,12 @@ where
             current_tx: Some(0),
             last_finalised_frame: None,
         };
+        // Set creator for peer list
+        {
+            let mut cfg = core.conf.write().unwrap();
+            let creator = cfg.get_creator();
+            cfg.peers.set_creator(creator);
+        }
         // Create leaf events
         let peers = core.conf.read().unwrap().peers.clone();
         for peer in peers.iter() {
