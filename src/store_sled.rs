@@ -121,6 +121,7 @@ where
 
     fn get_event_of_creator(&self, creator: P, height: Height) -> Result<Event<D, P, PK, Sig>> {
         let key = format!("{}-{}", creator, height).into_bytes();
+        debug!(":get event {} of creator {}", height, creator);
         match self.event.get(&*key)? {
             Some(x) => Ok(deserialize::<Event<D, P, PK, Sig>>(&x)?),
             None => Err(Error::NoneError.into()),

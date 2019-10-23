@@ -173,7 +173,11 @@ where
         };
         debug!("{}: created SyncReq", me.clone());
         drop(cfg);
-        debug!("{}: sending SyncReq to {}", me.clone(), peer.request_addr.clone());
+        debug!(
+            "{}: sending SyncReq to {}",
+            me.clone(),
+            peer.request_addr.clone()
+        );
         match sync_req_sender.send(peer.request_addr.clone(), request) {
             Ok(()) => {}
             Err(e) => error!(
@@ -187,11 +191,7 @@ where
         // NB: it may not be from the very same peer we have sent Sync Request above.
         block_on(async {
             if let Some(sync_reply) = sync_reply_receiver.next().await {
-                debug!(
-                    "{} Sync Reply from {}",
-                    me.clone(),
-                    sync_reply.from.clone()
-                );
+                debug!("{} Sync Reply from {}", me.clone(), sync_reply.from.clone());
                 // update Lamport timestamp of the node
                 {
                     core.write()
@@ -204,7 +204,7 @@ where
                         let event: Event<D, P, PK, Sig> = ev.into();
                         // check if event is valid
                         if !core.read().unwrap().check_event(&event).unwrap() {
-                            error!("Event {:?} is not valid", event);
+                            error!("Event {} is not valid", event);
                             continue;
                         }
                         let lamport_time = event.get_lamport_time();
@@ -246,7 +246,8 @@ where
             .unwrap()
             .get_next_height();
         debug!(
-            "heights; self: {}; other: {}",
+            "{}: heights; self: {}; other: {}",
+            me.clone(),
             height,
             config
                 .write()
@@ -297,9 +298,7 @@ where
         }
 
         // wait until hearbeat interval expires
-        debug!(
-            "{}: wait heartbeat expires", me.clone()
-        );
+        debug!("{}: wait heartbeat expires", me.clone());
         block_on(async {
             ticker.as_mut().await;
         });

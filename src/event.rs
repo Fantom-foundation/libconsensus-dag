@@ -3,6 +3,7 @@ use crate::lamport_time::LamportTime;
 use crate::peer::FrameNumber;
 use crate::peer::Height;
 use crate::transactions::InternalTransaction;
+use core::fmt::Formatter;
 use core::hash::Hash;
 use libcommon_rs::data::DataType;
 use libcommon_rs::peer::PeerId;
@@ -12,6 +13,7 @@ use libhash_sha3::Hash as EventHash;
 use libsignature::{PublicKey, Signature};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt::Display;
 
 /// Event structure used locally on the node; all fields are serialised/deserialised
 /// to be stored into the Store
@@ -143,6 +145,21 @@ where
         };
         let _ = ex.event_hash().unwrap();
         ex
+    }
+}
+
+impl<Data, P, PK, Sig> Display for Event<Data, P, PK, Sig>
+where
+    Data: DataType,
+    P: PeerId,
+    PK: PublicKey,
+    Sig: Signature<Hash = EventHash, PublicKey = PK>,
+{
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
+        write!(f, "creator:{}; height:{}; self-parent:{}; other-parent:{}; lamport_time:{}; hash:{}; frame:{}; signatures: {:?}; transactions: {:#?}.",
+        self.creator, self.height, self.self_parent, self.other_parent,
+        self.lamport_timestamp, self.hash, self.frame_number,
+        self.signatures, self.transactions)
     }
 }
 

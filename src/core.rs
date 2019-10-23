@@ -1,6 +1,7 @@
 use crate::conf::DAGconfig;
 use crate::errors::Result;
 use crate::event::Event;
+use crate::flag_table::FlagTable;
 use crate::flag_table::{min_frame, open_merge_flag_table, strict_merge_flag_table};
 use crate::lamport_time::LamportTime;
 use crate::peer::FrameNumber;
@@ -20,7 +21,6 @@ use libsignature::SecretKey;
 use libsignature::Signature;
 use std::sync::Arc;
 use std::sync::RwLock;
-use crate::flag_table::FlagTable;
 
 pub(crate) struct DAGcore<P, Data, SK, PK, Sig>
 where
