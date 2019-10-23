@@ -23,7 +23,7 @@ where
     pub store_type: StoreType,
     // heartbeat duration in milliseconds
     pub heartbeat: u64,
-    pub(crate) proc_a_delay: u32,
+    pub(crate) proc_a_delay: u64,
     pub(crate) waker: Option<Waker>,
     pub peers: DAGPeerList<P, PK>,
     pub creator: P,
@@ -62,7 +62,7 @@ where
     pub fn get_public_key(&self) -> PK {
         self.public_key.clone()
     }
-    pub fn get_proc_a_delay(&self) -> u32 {
+    pub fn get_proc_a_delay(&self) -> u64 {
         self.proc_a_delay.clone()
     }
     pub fn check_quit(&mut self) -> bool {
