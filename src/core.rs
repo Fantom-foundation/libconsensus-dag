@@ -247,6 +247,11 @@ where
             store.derive_creator_flag_table(&visibilis_flag_table)
         };
         let peer_size = self.conf.read().unwrap().peers.len();
+        debug!(
+            "* peer_size: {}; visibilis_ft_size:{}",
+            peer_size,
+            creator_visibilis_flag_table.len()
+        );
         if peer_size == creator_visibilis_flag_table.len() {
             let frame_upto = min_frame(&visibilis_flag_table);
             for frame in first_not_finalised_frame..frame_upto {

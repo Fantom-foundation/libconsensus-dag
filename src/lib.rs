@@ -678,11 +678,16 @@ mod tests {
         let kp5 = Signature::<EventHash>::generate_key_pair().unwrap();
 
         let mut peer_list = DAGPeerList::<Id, PublicKey>::default();
-        let peer1 = DAGPeer::<Id, PublicKey>::new(kp1.0.clone(), "127.0.0.1:9001".to_string());
-        let peer2 = DAGPeer::<Id, PublicKey>::new(kp2.0.clone(), "127.0.0.1:9003".to_string());
-        let peer3 = DAGPeer::<Id, PublicKey>::new(kp3.0.clone(), "127.0.0.1:9005".to_string());
-        let peer4 = DAGPeer::<Id, PublicKey>::new(kp4.0.clone(), "127.0.0.1:9007".to_string());
-        let peer5 = DAGPeer::<Id, PublicKey>::new(kp5.0.clone(), "127.0.0.1:9009".to_string());
+        let mut peer1 = DAGPeer::<Id, PublicKey>::new(kp1.0.clone(), "127.0.0.1:9001".to_string());
+        peer1.set_public_key(kp1.0.clone());
+        let mut peer2 = DAGPeer::<Id, PublicKey>::new(kp2.0.clone(), "127.0.0.1:9003".to_string());
+        peer2.set_public_key(kp2.0.clone());
+        let mut peer3 = DAGPeer::<Id, PublicKey>::new(kp3.0.clone(), "127.0.0.1:9005".to_string());
+        peer3.set_public_key(kp3.0.clone());
+        let mut peer4 = DAGPeer::<Id, PublicKey>::new(kp4.0.clone(), "127.0.0.1:9007".to_string());
+        peer4.set_public_key(kp4.0.clone());
+        let mut peer5 = DAGPeer::<Id, PublicKey>::new(kp5.0.clone(), "127.0.0.1:9009".to_string());
+        peer5.set_public_key(kp5.0.clone());
 
         peer_list.add(peer1).unwrap();
         peer_list.add(peer2).unwrap();

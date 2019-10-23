@@ -1,6 +1,6 @@
 [package]
 name = "libconsensus-dag"
-version = "0.0.12"
+version = "0.0.13"
 authors = ["Samuel Marks <@SamuelMarks>"]
 edition = "2018"
 
@@ -28,4 +28,4 @@ libsignature = { git = "https://github.com/Fantom-foundation/libsignature", vers
 failure = "0.1.5"
 
 [dev-dependencies]
-libsignature-ed25519-dalek = { git = "https://github.com/Fantom-foundation/libsignature-ed25519-dalek", version="0.2.0" }
+libsignature-ed25519-dalek = { git = "https://github.com/Fantom-foundation/libsignature-ed25519-dalek", version="0.2.2" }
