@@ -61,11 +61,16 @@ let kp5 = Signature::<EventHash>::generate_key_pair().unwrap();
 #### Prepare peer list
 ```rust
 let mut peer_list = DAGPeerList::<Id, PublicKey>::default();
-let peer1 = DAGPeer::<Id, PublicKey>::new(kp1.0.clone(), "127.0.0.1:9001".to_string());
-let peer2 = DAGPeer::<Id, PublicKey>::new(kp2.0.clone(), "127.0.0.1:9003".to_string());
-let peer3 = DAGPeer::<Id, PublicKey>::new(kp3.0.clone(), "127.0.0.1:9005".to_string());
-let peer4 = DAGPeer::<Id, PublicKey>::new(kp4.0.clone(), "127.0.0.1:9007".to_string());
-let peer5 = DAGPeer::<Id, PublicKey>::new(kp5.0.clone(), "127.0.0.1:9009".to_string());
+let mut peer1 = DAGPeer::<Id, PublicKey>::new(kp1.0.clone(), "127.0.0.1:9001".to_string());
+peer1.set_public_key(kp1.0.clone());
+let mut peer2 = DAGPeer::<Id, PublicKey>::new(kp2.0.clone(), "127.0.0.1:9003".to_string());
+peer2.set_public_key(kp2.0.clone());
+let mut peer3 = DAGPeer::<Id, PublicKey>::new(kp3.0.clone(), "127.0.0.1:9005".to_string());
+peer3.set_public_key(kp3.0.clone());
+let mut peer4 = DAGPeer::<Id, PublicKey>::new(kp4.0.clone(), "127.0.0.1:9007".to_string());
+peer4.set_public_key(kp4.0.clone());
+let mut peer5 = DAGPeer::<Id, PublicKey>::new(kp5.0.clone(), "127.0.0.1:9009".to_string());
+peer5.set_public_key(kp5.0.clone());
 
 peer_list.add(peer1).unwrap();
 peer_list.add(peer2).unwrap();
@@ -81,7 +86,8 @@ consensus_config1.request_addr = "127.0.0.1:9001".to_string();
 consensus_config1.reply_addr = "127.0.0.1:9002".to_string();
 consensus_config1.transport_type = libtransport::TransportType::TCP;
 consensus_config1.store_type = crate::store::StoreType::Sled;
-consensus_config1.creator = kp1.0;
+consensus_config1.creator = kp1.0.clone();
+consensus_config1.public_key = kp1.0;
 consensus_config1.secret_key = kp1.1;
 consensus_config1.peers = peer_list.clone();
 
@@ -90,7 +96,8 @@ consensus_config2.request_addr = "127.0.0.1:9003".to_string();
 consensus_config2.reply_addr = "127.0.0.1:9004".to_string();
 consensus_config2.transport_type = libtransport::TransportType::TCP;
 consensus_config2.store_type = crate::store::StoreType::Sled;
-consensus_config2.creator = kp2.0;
+consensus_config2.creator = kp2.0.clone();
+consensus_config2.public_key = kp2.0;
 consensus_config2.secret_key = kp2.1;
 consensus_config2.peers = peer_list.clone();
 
@@ -99,7 +106,8 @@ consensus_config3.request_addr = "127.0.0.1:9005".to_string();
 consensus_config3.reply_addr = "127.0.0.1:9006".to_string();
 consensus_config3.transport_type = libtransport::TransportType::TCP;
 consensus_config3.store_type = crate::store::StoreType::Sled;
-consensus_config3.creator = kp3.0;
+consensus_config3.creator = kp3.0.clone();
+consensus_config3.public_key = kp3.0;
 consensus_config3.secret_key = kp3.1;
 consensus_config3.peers = peer_list.clone();
 
@@ -108,7 +116,8 @@ consensus_config4.request_addr = "127.0.0.1:9007".to_string();
 consensus_config4.reply_addr = "127.0.0.1:9008".to_string();
 consensus_config4.transport_type = libtransport::TransportType::TCP;
 consensus_config4.store_type = crate::store::StoreType::Sled;
-consensus_config4.creator = kp4.0;
+consensus_config4.creator = kp4.0.clone();
+consensus_config4.public_key = kp4.0;
 consensus_config4.secret_key = kp4.1;
 consensus_config4.peers = peer_list.clone();
 
@@ -117,7 +126,8 @@ consensus_config5.request_addr = "127.0.0.1:9009".to_string();
 consensus_config5.reply_addr = "127.0.0.1:9010".to_string();
 consensus_config5.transport_type = libtransport::TransportType::TCP;
 consensus_config5.store_type = crate::store::StoreType::Sled;
-consensus_config5.creator = kp5.0;
+consensus_config5.creator = kp5.0.clone();
+consensus_config5.public_key = kp5.0;
 consensus_config5.secret_key = kp5.1;
 consensus_config5.peers = peer_list.clone();
 ```
