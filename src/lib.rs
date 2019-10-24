@@ -346,6 +346,7 @@ where
     };
     let store = { core.read().unwrap().store.clone() };
     block_on(async {
+        debug!("{}: waiting for Sync request", me.clone());
         while let Some(sync_req) = sync_req_receiver.next().await {
             debug!(
                 "{} Sync request from {}",
@@ -407,6 +408,7 @@ where
                 }
             }
         }
+        debug!("{}: exit proc_b loop!", me.clone());
     });
 }
 
