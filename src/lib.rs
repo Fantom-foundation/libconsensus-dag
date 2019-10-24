@@ -111,7 +111,9 @@ where
     Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK> + 'static,
 {
     let config = { core.read().unwrap().conf.clone() };
-    thread::sleep(Duration::from_millis(config.read().unwrap().get_proc_a_delay()));
+    thread::sleep(Duration::from_millis(
+        config.read().unwrap().get_proc_a_delay(),
+    ));
     let mut ticker = {
         let cfg = config.read().unwrap();
         async_timer::Interval::platform_new(Duration::from_millis(cfg.heartbeat))
