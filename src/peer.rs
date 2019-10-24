@@ -125,7 +125,7 @@ where
         }
     }
     pub(crate) fn get_lamport_time(&self) -> LamportTime {
-        self.lamport_time.clone()
+        self.lamport_time
     }
     pub(crate) fn get_next_height(&mut self) -> Height {
         self.height += 1;

@@ -140,7 +140,7 @@ where
                 let event = match self.get_event_of_creator(peer.clone(), height.clone()) {
                     Err(e) => match e.downcast::<Error>() {
                         Ok(err) => {
-                            //debug!("err: {}", err);
+                            debug!("err: {}", err);
                             break;
                             // FIXME: following code crashes with stack overflow panic
                             //                            if err == Error::NoneError {

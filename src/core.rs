@@ -67,7 +67,7 @@ where
                 }
             }
         };
-        let mut core = DAGcore {
+        let core = DAGcore {
             conf: Arc::new(RwLock::new(conf)),
             store: Arc::new(RwLock::new(store)),
             tx_pool: Vec::with_capacity(1),

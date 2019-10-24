@@ -63,7 +63,7 @@ where
         self.public_key.clone()
     }
     pub fn get_proc_a_delay(&self) -> u64 {
-        self.proc_a_delay.clone()
+        self.proc_a_delay
     }
     pub fn check_quit(&mut self) -> bool {
         self.shutdown
