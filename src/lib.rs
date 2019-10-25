@@ -230,22 +230,26 @@ where
 
         // create new event if needed referring remote peer as other-parent
         let mut local_core = core.write().unwrap();
-        let creator = local_core.conf.read().unwrap().get_creator();
+        let creator = { local_core.conf.read().unwrap().get_creator() };
         debug!("{}: create new event", me);
-        let height = config
-            .write()
-            .unwrap()
-            .peers
-            .find_peer_mut(&creator)
-            .unwrap()
-            .get_next_height();
-        let other_height = config
-            .read()
-            .unwrap()
-            .peers
-            .find_peer(&peer.id)
-            .unwrap()
-            .get_height();
+        let height = {
+            config
+                .write()
+                .unwrap()
+                .peers
+                .find_peer_mut(&creator)
+                .unwrap()
+                .get_next_height()
+        };
+        let other_height = {
+            config
+                .read()
+                .unwrap()
+                .peers
+                .find_peer(&peer.id)
+                .unwrap()
+                .get_height()
+        };
         debug!(
             "{}: heights; self[{}]: {}; other[{}]: {}",
             me.clone(),
@@ -265,6 +269,7 @@ where
                     .unwrap(),
             )
         };
+        debug!("{}: parent events read", me.clone());
         let self_parent = self_parent_event.hash;
         let other_parent = other_parent_event.hash;
         let lamport_timestamp = local_core.get_next_lamport_time();
@@ -279,6 +284,7 @@ where
             transactions,
             internal_transactions,
         );
+        debug!("{}: event formed: {}", me.clone(), event.clone());
         let ex = event.event_hash().unwrap();
         let rc = local_core.insert_event(event).unwrap();
         if !rc {
@@ -337,13 +343,15 @@ where
             debug!(
                 "{} Sync request from {} <== {}",
                 me.clone(),
-                config
-                    .read()
-                    .unwrap()
-                    .peers
-                    .find_peer(&sync_req.from)
-                    .unwrap()
-                    .get_base_addr(),
+                {
+                    config
+                        .read()
+                        .unwrap()
+                        .peers
+                        .find_peer(&sync_req.from)
+                        .unwrap()
+                        .get_base_addr()
+                },
                 sync_req.clone()
             );
             {
@@ -373,6 +381,7 @@ where
                         lamport_time: { core.read().unwrap().get_lamport_time() },
                         events,
                     };
+                    debug!("{}: SyncReply formed: {}", me.clone(), reply.clone());
                     match {
                         config
                             .write()
