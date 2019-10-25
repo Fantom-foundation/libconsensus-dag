@@ -81,7 +81,7 @@ fn listener<P, Data, SK, PK, Sig>(
         let cfg = config.read().unwrap();
         (cfg.transport_type.clone(), cfg.reply_addr.clone())
     };
-    let me = reply_bind_address.clone();
+    let me = { core.read().unwrap().me_a() };
 
     let mut sync_reply_receiver = {
         match transport_type {
@@ -173,7 +173,7 @@ where
         let cfg = config.read().unwrap();
         (cfg.transport_type.clone(), cfg.reply_addr.clone())
     };
-    let me = reply_bind_address.clone();
+    let me = { core.read().unwrap().me_a() };
     debug!(
         "procedure_a, reply_bind_addr: {}",
         reply_bind_address.clone()
@@ -308,7 +308,7 @@ where
         let cfg = config.read().unwrap();
         (cfg.transport_type.clone(), cfg.request_addr.clone())
     };
-    let me = request_bind_address.clone();
+    let me = { core.read().unwrap().me_b() };
     debug!(
         "procedure_b, request_bind_addr: {}",
         request_bind_address.clone()
@@ -541,7 +541,7 @@ where
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let myself = Pin::get_mut(self);
         let mut core = myself.core.write().unwrap();
-        let me = { core.conf.read().unwrap().get_request_addr() };
+        let me = core.me_a();
         debug!("o {}: check last finalised frame", me.clone());
         let last_finalised_frame: FrameNumber = match core.last_finalised_frame {
             None => {

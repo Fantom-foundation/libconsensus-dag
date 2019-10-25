@@ -41,6 +41,8 @@ where
     pub(crate) current_event: Option<usize>,
     pub(crate) current_tx: Option<usize>,
     pub(crate) last_finalised_frame: Option<FrameNumber>,
+    me_a: String,
+    me_b: String,
 }
 
 impl<P, Data, SK, PK, Sig> DAGcore<P, Data, SK, PK, Sig>
@@ -69,6 +71,8 @@ where
                 }
             }
         };
+        let me_a = format!("{} {}", conf.get_creator(), conf.reply_addr.clone());
+        let me_b = format!("{} {}", conf.get_creator(), conf.request_addr.clone());
         let core = DAGcore {
             conf: Arc::new(RwLock::new(conf)),
             store: Arc::new(RwLock::new(store)),
@@ -79,6 +83,8 @@ where
             current_event: Some(0),
             current_tx: Some(0),
             last_finalised_frame: None,
+            me_a,
+            me_b,
         };
         // Set creator for peer list
         {
@@ -108,6 +114,12 @@ where
             }
         }
         core
+    }
+    pub(crate) fn me_a(&self) -> String {
+        self.me_a.clone()
+    }
+    pub(crate) fn me_b(&self) -> String {
+        self.me_b.clone()
     }
     pub(crate) fn get_lamport_time(&self) -> LamportTime {
         self.lamport_time
@@ -233,14 +245,8 @@ where
             event
                 .signatures
                 .insert(cfg.peers.get_creator_id(), signature.clone());
-            debug!(
-                "* insert event: signing hash: {}, creator:{},{}, signature:{}",
-                event_hash,
-                cfg.peers.get_creator_id(),
-                cfg.get_creator(),
-                signature
-            );
         }
+        debug!("{}: * insert event: {}", self.me_a(), event.clone());
 
         {
             self.store.write().unwrap().set_event(event)?;
@@ -251,12 +257,14 @@ where
         };
         let peer_size = { self.conf.read().unwrap().peers.len() };
         debug!(
-            "* peer_size: {}; visibilis_ft_size:{}",
+            "{}: * peer_size: {}; visibilis_ft_size:{}",
+            self.me_a(),
             peer_size,
             creator_visibilis_flag_table.len()
         );
         debug!(
-            "* ft:{}; creator_ft:{}",
+            "{}: * ft:{}; creator_ft:{}",
+            self.me_a(),
             flag_table_fmt(&visibilis_flag_table),
             creator_flag_table_fmt(&creator_visibilis_flag_table)
         );
