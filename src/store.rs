@@ -80,7 +80,7 @@ where
                 },
                 Ok(e) => match result.get(&e.creator) {
                     Some(frame) => {
-                        if *frame > *value {
+                        if *frame < *value {
                             result.insert(e.creator, *value);
                         }
                     }
