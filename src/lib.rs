@@ -132,8 +132,8 @@ fn listener<P, Data, SK, PK, Sig>(
                         let creator = event.get_creator();
                         // insert event into node DB
                         {
-                            core.write().unwrap().insert_event(event).unwrap()
-                        };
+                            core.write().unwrap().insert_event(event).unwrap();
+                        }
                         // update lamport time and height of the event creator's peer
                         config
                             .write()
@@ -441,7 +441,7 @@ where
         let listener_core = core.clone();
         let handle = thread::Builder::new()
             .name("listener".to_string())
-            .stack_size(1 * 1024 * 1024)
+            .stack_size(1024 * 1024)
             .spawn(|| listener(listener_core, rx))?;
         //        let configA = Arc::clone(&cfg_mutexed);
         let core_a = core.clone();
