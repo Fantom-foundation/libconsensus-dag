@@ -238,34 +238,26 @@ where
             .find_peer_mut(&creator)
             .unwrap()
             .get_next_height();
+        let other_height = config
+            .read()
+            .unwrap()
+            .peers
+            .find_peer(&peer.id)
+            .unwrap()
+            .get_height();
         debug!(
             "{}: heights; self[{}]: {}; other[{}]: {}",
             me.clone(),
             creator.clone(),
             height,
             peer.id.clone(),
-            config
-                .read()
-                .unwrap()
-                .peers
-                .find_peer(&peer.id)
-                .unwrap()
-                .get_height()
+            other_height,
         );
         let (other_parent_event, self_parent_event) = {
             let store = local_core.store.read().unwrap();
             (
                 store
-                    .get_event_of_creator(
-                        peer.id.clone(),
-                        config
-                            .write()
-                            .unwrap()
-                            .peers
-                            .find_peer_mut(&peer.id)
-                            .unwrap()
-                            .get_height(),
-                    )
+                    .get_event_of_creator(peer.id.clone(), other_height)
                     .unwrap(),
                 store
                     .get_event_of_creator(creator.clone(), height - 1)
