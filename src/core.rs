@@ -225,8 +225,8 @@ where
             self.store
                 .write()
                 .unwrap()
-                .set_flag_table(&event_hash, &visibilis_flag_table)?
-        };
+                .set_flag_table(&event_hash, &visibilis_flag_table)?;
+        }
         {
             let cfg = self.conf.read().unwrap();
             let signature = Sig::sign(event_hash, cfg.get_public_key(), cfg.get_secret_key())?;
@@ -243,8 +243,8 @@ where
         }
 
         {
-            self.store.write().unwrap().set_event(event)?
-        };
+            self.store.write().unwrap().set_event(event)?;
+        }
         let creator_visibilis_flag_table = {
             let store = self.store.read().unwrap();
             store.derive_creator_flag_table(&visibilis_flag_table)
