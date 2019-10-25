@@ -322,7 +322,7 @@ where
         // is always 0 and omitted here.
         //let next = 1 + self.r % (self.n - 1);
         let next = (self.current + self.r) % self.n;
-        if self.r > 0 {
+        if self.r > 1 {
             self.r >>= 1;
         } else {
             self.r = self.n >> 1
