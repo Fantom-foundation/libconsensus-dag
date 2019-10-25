@@ -1,6 +1,8 @@
 use crate::conf::DAGconfig;
 use crate::errors::Result;
 use crate::event::Event;
+use crate::flag_table::creator_flag_table_fmt;
+use crate::flag_table::flag_table_fmt;
 use crate::flag_table::FlagTable;
 use crate::flag_table::{min_frame, open_merge_flag_table, strict_merge_flag_table};
 use crate::lamport_time::LamportTime;
@@ -252,6 +254,11 @@ where
             "* peer_size: {}; visibilis_ft_size:{}",
             peer_size,
             creator_visibilis_flag_table.len()
+        );
+        debug!(
+            "* ft:{}; creator_ft:{}",
+            flag_table_fmt(&visibilis_flag_table),
+            creator_flag_table_fmt(&creator_visibilis_flag_table)
         );
         if peer_size == creator_visibilis_flag_table.len() {
             let frame_upto = min_frame(&visibilis_flag_table);

@@ -1,5 +1,6 @@
 use crate::errors::{Error, Result};
 use crate::lamport_time::LamportTime;
+use core::fmt::Formatter;
 use core::slice::{Iter, IterMut};
 use libcommon_rs::peer::{Peer, PeerId, PeerList};
 use libconsensus::errors::Error::AtMaxVecCapacity;
@@ -7,6 +8,7 @@ use libconsensus::BaseConsensusPeer;
 use libsignature::PublicKey;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::fs::File;
 use std::io::Read;
 use std::net::SocketAddr;
@@ -144,6 +146,26 @@ where
     }
 }
 
+impl<P, PK> Display for DAGPeer<P, PK>
+where
+    P: PeerId,
+    PK: PublicKey,
+{
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
+        let mut formatted = String::new();
+        formatted.push_str(&format!(
+            "id:{}; pub_key:{}; request_addr:{}; reply_addr:{}; height:{}; lamport_time:{}.",
+            self.id.clone(),
+            self.pub_key.clone(),
+            self.request_addr.clone(),
+            self.reply_addr.clone(),
+            self.height,
+            self.lamport_time
+        ));
+        write!(f, "{}", formatted)
+    }
+}
+
 #[derive(Clone)]
 pub struct DAGPeerList<P, PK>
 where
@@ -157,6 +179,8 @@ where
     r: usize,
     // creator ID for the current node
     creator: P,
+    // index of creator in the peers
+    current: usize,
 }
 
 impl<P, PK> Default for DAGPeerList<P, PK>
@@ -170,6 +194,7 @@ where
             n: 0,
             r: 0,
             creator: Default::default(),
+            current: 0,
         }
     }
 }
@@ -207,6 +232,7 @@ where
             n: 0,
             r: 0,
             creator: Default::default(),
+            current: 0,
         }
     }
     fn get_peers_from_file(&mut self, json_peer_path: String) -> std::result::Result<(), Error> {
@@ -254,20 +280,31 @@ where
         let creator = self.creator.clone();
         self.peers_mut().sort_by(|a, b| {
             use std::cmp::Ordering;
-            let a_cmp = a.id == creator;
-            let b_cmp = b.id == creator;
-            if a_cmp {
-                if b_cmp {
-                    Ordering::Equal
-                } else {
-                    Ordering::Less
-                }
-            } else if b_cmp {
+            if a.id < b.id {
+                Ordering::Less
+            } else if a.id > b.id {
                 Ordering::Greater
             } else {
                 Ordering::Equal
             }
-        })
+            //            let a_cmp = a.id == creator;
+            //            let b_cmp = b.id == creator;
+            //            if a_cmp {
+            //                if b_cmp {
+            //                    Ordering::Equal
+            //                } else {
+            //                    Ordering::Less
+            //                }
+            //            } else if b_cmp {
+            //                Ordering::Greater
+            //            } else {
+            //                Ordering::Equal
+            //            }
+        });
+        self.current = match self.peers.iter().position(|x| x.id == self.creator) {
+            Some(p) => p,
+            None => 0, //panic!("creator not found in the peers!"),
+        }
     }
     pub fn set_creator(&mut self, creator: P) {
         self.creator = creator;
@@ -277,7 +314,8 @@ where
         // we assume the very first peer in the vector is one
         // cotrresponding to the current node, so the value of `current`
         // is always 0 and omitted here.
-        let next = 1 + self.r % (self.n - 1);
+        //let next = 1 + self.r % (self.n - 1);
+        let next = (self.current + self.r) % self.n;
         if self.r > 0 {
             self.r >>= 1;
         } else {

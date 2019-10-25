@@ -200,8 +200,8 @@ where
             break;
         }
         // choose the next peer and send Sync Request to it.
-        debug!("{} getting next peer", me.clone());
         let peer = cfg.peers.next_peer();
+        debug!("{} got next peer: {}", me.clone(), peer.clone());
         let gossip_list: GossipList<P> = cfg.peers.get_gossip_list();
         debug!("{} got gossip list", me.clone());
         let request = SyncReq {

@@ -1,11 +1,35 @@
 use crate::peer::FrameNumber;
+use libcommon_rs::peer::PeerId;
 use libhash_sha3::Hash as EventHash;
 use std::collections::HashMap;
 
 // FlagTable is a map from EventHash into Frame number
 pub(crate) type FlagTable = HashMap<EventHash, FrameNumber>;
 // CreatorFlagTable is a map from PeerId into Frame number (Frame)
-pub(crate) type CreatorFlagTable<PeerId> = HashMap<PeerId, FrameNumber>;
+pub(crate) type CreatorFlagTable<P: PeerId> = HashMap<P, FrameNumber>;
+
+pub(crate) fn flag_table_fmt(ft: &FlagTable) -> String {
+    let mut formatted = String::new();
+    formatted.push_str("[");
+    for (k, v) in ft {
+        formatted.push_str(&format!("{}:{},", k, v));
+    }
+    formatted.push_str("]");
+    formatted
+}
+
+pub(crate) fn creator_flag_table_fmt<P>(ft: &CreatorFlagTable<P>) -> String
+where
+    P: PeerId,
+{
+    let mut formatted = String::new();
+    formatted.push_str("[");
+    for (k, v) in ft {
+        formatted.push_str(&format!("{}:{},", k, v));
+    }
+    formatted.push_str("]");
+    formatted
+}
 
 // Strict flag table merging procedure takes two flag tables and the frame number
 // and forms a new flag table which contains only those entries from any of source
