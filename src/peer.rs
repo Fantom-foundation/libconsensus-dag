@@ -1,5 +1,6 @@
 use crate::errors::{Error, Result};
 use crate::lamport_time::LamportTime;
+use core::fmt::Display;
 use core::fmt::Formatter;
 use core::slice::{Iter, IterMut};
 use libcommon_rs::peer::{Peer, PeerId, PeerList};
@@ -8,7 +9,6 @@ use libconsensus::BaseConsensusPeer;
 use libsignature::PublicKey;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fmt::Display;
 use std::fs::File;
 use std::io::Read;
 use std::net::SocketAddr;
@@ -21,6 +21,12 @@ pub(crate) type Height = usize;
 pub struct Gossip {
     pub(crate) lamport_time: LamportTime,
     pub(crate) height: Height,
+}
+
+impl Display for Gossip {
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
+        write!(f, "({};{})", self.lamport_time, self.height)
+    }
 }
 
 pub(crate) type GossipList<P> = HashMap<P, Gossip>;

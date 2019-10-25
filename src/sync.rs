@@ -1,7 +1,10 @@
 use crate::event::NetEvent;
 use crate::lamport_time::LamportTime;
 use crate::peer::GossipList;
+use core::fmt::Display;
+use core::fmt::Formatter;
 use core::hash::Hash;
+use libcommon_rs::data::DataType;
 use libcommon_rs::peer::PeerId;
 use libcommon_rs::Stub;
 use libhash_sha3::Hash as EventHash;
@@ -42,4 +45,51 @@ where
     PK: PublicKey,
     Sig: Signature<Hash = EventHash, PublicKey = PK>,
 {
+}
+
+impl<P> Display for SyncReq<P>
+where
+    P: PeerId,
+{
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
+        let mut formatted = String::new();
+        formatted.push_str(&format!(
+            "from:{}; to:{}; lamport_time:{}; gossip_list:[",
+            self.from.clone(),
+            self.to.clone(),
+            self.lamport_time
+        ));
+        for (k, v) in self.gossip_list.iter() {
+            formatted.push_str(&format!("({}:{})", k, v));
+        }
+        formatted.push_str("]");
+        write!(f, "{}", formatted)
+    }
+}
+
+impl<'a, Data, P, PK, Sig> Display for SyncReply<Data, P, PK, Sig>
+where
+    Data: DataType,
+    P: PeerId,
+    PK: PublicKey,
+    Sig: Signature<Hash = EventHash, PublicKey = PK>,
+{
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
+        let mut formatted = String::new();
+        formatted.push_str(&format!(
+            "from:{}; to:{}; lamport_time:{}; gossip_list:[",
+            self.from.clone(),
+            self.to.clone(),
+            self.lamport_time
+        ));
+        for (k, v) in self.gossip_list.iter() {
+            formatted.push_str(&format!("({}:{})", k, v));
+        }
+        formatted.push_str("]; events:[");
+        for e in self.events.iter() {
+            formatted.push_str(&format!("({})", e));
+        }
+        formatted.push_str("]");
+        write!(f, "{}", formatted)
+    }
 }

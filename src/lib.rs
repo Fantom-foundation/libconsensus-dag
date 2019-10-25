@@ -212,9 +212,10 @@ where
         };
         drop(cfg);
         debug!(
-            "{}: sending SyncReq to {}",
+            "{}: sending SyncReq to {} ==> {}",
             me.clone(),
-            peer.request_addr.clone()
+            peer.request_addr.clone(),
+            request.clone()
         );
         match sync_req_sender.send(peer.request_addr.clone(), request) {
             Ok(()) => {}
@@ -334,7 +335,7 @@ where
         debug!("{}: waiting for Sync request", me.clone());
         while let Some(sync_req) = sync_req_receiver.next().await {
             debug!(
-                "{} Sync request from {}",
+                "{} Sync request from {} <== {}",
                 me.clone(),
                 config
                     .read()
@@ -342,7 +343,8 @@ where
                     .peers
                     .find_peer(&sync_req.from)
                     .unwrap()
-                    .get_base_addr()
+                    .get_base_addr(),
+                sync_req.clone()
             );
             {
                 core.write()
