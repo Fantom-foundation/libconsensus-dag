@@ -85,7 +85,7 @@ where
             cfg.peers.set_creator(creator);
         }
         // Create leaf events
-        let peers = core.conf.read().unwrap().peers.clone();
+        let peers = { core.conf.read().unwrap().peers.clone() };
         for peer in peers.iter() {
             let mut event: Event<Data, P, PK, Sig> = Event::new(
                 peer.get_id(),
@@ -161,7 +161,7 @@ where
         // - self-parant must be the last known event of the creator with height one minus height of the event
         // - all signatures must be verified positively
         for (signatory, signature) in event.signatures.iter() {
-            let peer = self.conf.read().unwrap().peers.find_peer(signatory)?;
+            let peer = { self.conf.read().unwrap().peers.find_peer(signatory)? };
             let res = signature.verify(event.get_hash(), peer.get_public_key())?;
             if !res {
                 return Ok(false);
@@ -194,10 +194,7 @@ where
                     let store = self.store.read().unwrap();
                     store.derive_creator_flag_table(&root_flag_table)
                 };
-                let root_majority = {
-                    let conf = self.conf.read().unwrap();
-                    conf.peers.root_majority()
-                };
+                let root_majority = { self.conf.read().unwrap().peers.root_majority() };
                 if creator_root_flag_table.len() >= root_majority {
                     root = true;
                     self_parent_event.frame_number + 1
@@ -222,10 +219,12 @@ where
         if root {
             visibilis_flag_table.insert(event_hash.clone(), frame);
         }
-        self.store
-            .write()
-            .unwrap()
-            .set_flag_table(&event_hash, &visibilis_flag_table)?;
+        {
+            self.store
+                .write()
+                .unwrap()
+                .set_flag_table(&event_hash, &visibilis_flag_table)?
+        };
         {
             let cfg = self.conf.read().unwrap();
             let signature = Sig::sign(event_hash, cfg.get_public_key(), cfg.get_secret_key())?;
@@ -241,12 +240,14 @@ where
             );
         }
 
-        self.store.write().unwrap().set_event(event)?;
+        {
+            self.store.write().unwrap().set_event(event)?
+        };
         let creator_visibilis_flag_table = {
             let store = self.store.read().unwrap();
             store.derive_creator_flag_table(&visibilis_flag_table)
         };
-        let peer_size = self.conf.read().unwrap().peers.len();
+        let peer_size = { self.conf.read().unwrap().peers.len() };
         debug!(
             "* peer_size: {}; visibilis_ft_size:{}",
             peer_size,
@@ -259,7 +260,7 @@ where
                 //self.finalise_frame(frame)
                 self.last_finalised_frame = Some(frame);
                 // notify consumer on next transaction in consensus availability
-                if let Some(waker) = self.conf.write().unwrap().waker.take() {
+                if let Some(waker) = { self.conf.write().unwrap().waker.take() } {
                     waker.wake();
                 }
             }

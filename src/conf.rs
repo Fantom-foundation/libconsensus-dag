@@ -65,6 +65,9 @@ where
     pub fn get_proc_a_delay(&self) -> u64 {
         self.proc_a_delay
     }
+    pub fn get_request_addr(&self) -> String {
+        self.request_addr.clone()
+    }
     pub fn check_quit(&mut self) -> bool {
         self.shutdown
     }

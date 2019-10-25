@@ -56,48 +56,101 @@ where
     PK: PublicKey,
     Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK>,
 {
-    //    conf: Arc<Mutex<DAGconfig<P, T>>>,
     core: Arc<RwLock<DAGcore<P, T, SK, PK, Sig>>>,
     listener_handle: Option<JoinHandle<()>>,
     proc_a_handle: Option<JoinHandle<()>>,
     proc_b_handle: Option<JoinHandle<()>>,
 
-    //    tx_pool: Vec<T>,
-    //    internal_tx_pool: Vec<InternalTransaction<P>>,
     quit_tx: Sender<()>,
-    //    lamport_time: LamportTime,
-    //    current_frame: Frame,
-    //    last_finalised_frame: Option<Frame>,
-    //    sync_request_transport: Box<dyn Transport<P, SyncReq<P>, Error, DAGPeerList<P>> + 'a>,
-    //    sync_reply_transport: Box<dyn Transport<P, SyncReply<P>, Error, DAGPeerList<P>> + 'a>,
 }
 
-fn listener<P, Data: 'static, SK, PK, Sig>(
+fn listener<P, Data, SK, PK, Sig>(
     core: Arc<RwLock<DAGcore<P, Data, SK, PK, Sig>>>,
     quit_rx: Receiver<()>,
 ) where
-    Data: DataType,
-    P: PeerId,
+    Data: DataType + 'static,
+    P: PeerId + 'static,
     SK: SecretKey,
-    PK: PublicKey,
-    Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK>,
+    PK: PublicKey + 'static,
+    Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK> + 'static,
 {
     let config = { core.read().unwrap().conf.clone() };
     // FIXME: what we do with unwrap() in threads?
+
+    let (transport_type, reply_bind_address) = {
+        let cfg = config.read().unwrap();
+        (cfg.transport_type.clone(), cfg.reply_addr.clone())
+    };
+    let me = reply_bind_address.clone();
+
+    let mut sync_reply_receiver = {
+        match transport_type {
+            libtransport::TransportType::TCP => {
+                let x: TCPreceiver<P, SyncReply<Data, P, PK, Sig>, Error, DAGPeerList<P, PK>> =
+                    TCPreceiver::new(reply_bind_address).unwrap();
+                x
+            }
+            libtransport::TransportType::Unknown => panic!("unknown transport"),
+        }
+    };
+    debug!("{}: listener started", me.clone());
+
     loop {
         // check if quit channel got message
-        let mut cfg = config.write().unwrap();
+        //debug!("{}: listener loop start", me.clone());
         match quit_rx.try_recv() {
             Ok(_) | Err(TryRecvError::Disconnected) => {
+                let mut cfg = config.write().unwrap();
                 cfg.shutdown = true;
                 break;
             }
             Err(TryRecvError::Empty) => {}
         }
+
+        // Receive Sync Reply and process it.
+        // NB: it may not be from the very same peer we have sent Sync Request above.
+        block_on(async {
+            if let Some(sync_reply) = sync_reply_receiver.next().await {
+                debug!("{} Sync Reply from {}", me.clone(), sync_reply.from.clone());
+                // update Lamport timestamp of the node
+                {
+                    core.write()
+                        .unwrap()
+                        .update_lamport_time(sync_reply.lamport_time);
+                }
+                // process unknown events
+                for ev in sync_reply.events.into_iter() {
+                    {
+                        let event: Event<Data, P, PK, Sig> = ev.into();
+                        // check if event is valid
+                        if !{ core.read().unwrap().check_event(&event).unwrap() } {
+                            error!("Event {} is not valid", event);
+                            continue;
+                        }
+                        let lamport_time = event.get_lamport_time();
+                        let height = event.get_height();
+                        let creator = event.get_creator();
+                        // insert event into node DB
+                        {
+                            core.write().unwrap().insert_event(event).unwrap()
+                        };
+                        // update lamport time and height of the event creator's peer
+                        config
+                            .write()
+                            .unwrap()
+                            .peers
+                            .find_peer_mut(&creator)
+                            .unwrap()
+                            .update_lamport_time_and_height(lamport_time, height);
+                    }
+                }
+            }
+        });
         // allow to pool again if waker is set
-        if let Some(waker) = cfg.waker.take() {
-            waker.wake()
-        }
+        //if let Some(waker) = config.write().unwrap().waker.take() {
+        //    waker.wake()
+        //}
+        //debug!("{}: listener loop end", me.clone());
     }
 }
 
@@ -111,11 +164,9 @@ where
     Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK> + 'static,
 {
     let config = { core.read().unwrap().conf.clone() };
-    thread::sleep(Duration::from_millis(
-        config.read().unwrap().get_proc_a_delay(),
-    ));
     let mut ticker = {
         let cfg = config.read().unwrap();
+        thread::sleep(Duration::from_millis(cfg.get_proc_a_delay()));
         async_timer::Interval::platform_new(Duration::from_millis(cfg.heartbeat))
     };
     let (transport_type, reply_bind_address) = {
@@ -132,20 +183,6 @@ where
         match transport_type {
             libtransport::TransportType::TCP => {
                 TCPsender::<P, SyncReq<P>, errors::Error, peer::DAGPeerList<P, PK>>::new().unwrap()
-            }
-            libtransport::TransportType::Unknown => panic!("unknown transport"),
-        }
-    };
-    let mut sync_reply_receiver = {
-        match transport_type {
-            libtransport::TransportType::TCP => {
-                let x: TCPreceiver<P, SyncReply<D, P, PK, Sig>, Error, DAGPeerList<P, PK>> =
-                    TCPreceiver::new(reply_bind_address).unwrap();
-                //                TCPreceiver::<P, SyncReply<D, P, PK, Sig>, Error, DAGPeerList<P, PK>>::new(
-                //                    reply_bind_address,
-                //                )
-                //                .unwrap()
-                x
             }
             libtransport::TransportType::Unknown => panic!("unknown transport"),
         }
@@ -173,7 +210,6 @@ where
             gossip_list,
             lamport_time: { core.read().unwrap().get_lamport_time() },
         };
-        debug!("{}: created SyncReq", me.clone());
         drop(cfg);
         debug!(
             "{}: sending SyncReq to {}",
@@ -189,57 +225,12 @@ where
         }
         debug!("{}: SyncReq sent", me.clone());
 
-        // Receive Sync Reply and process it.
-        // NB: it may not be from the very same peer we have sent Sync Request above.
-        block_on(async {
-            if let Some(sync_reply) = sync_reply_receiver.next().await {
-                debug!("{} Sync Reply from {}", me.clone(), sync_reply.from.clone());
-                // update Lamport timestamp of the node
-                {
-                    core.write()
-                        .unwrap()
-                        .update_lamport_time(sync_reply.lamport_time);
-                }
-                // process unknown events
-                for ev in sync_reply.events.into_iter() {
-                    {
-                        let event: Event<D, P, PK, Sig> = ev.into();
-                        // check if event is valid
-                        if !core.read().unwrap().check_event(&event).unwrap() {
-                            error!("Event {} is not valid", event);
-                            continue;
-                        }
-                        let lamport_time = event.get_lamport_time();
-                        let height = event.get_height();
-                        let creator = event.get_creator();
-                        // insert event into node DB
-                        core.write().unwrap().insert_event(event).unwrap();
-                        // update lamport time and height of the event creator's peer
-                        config
-                            .write()
-                            .unwrap()
-                            .peers
-                            .find_peer_mut(&creator)
-                            .unwrap()
-                            .update_lamport_time_and_height(lamport_time, height);
-                    }
-                }
-            }
-        });
+        // Sync Reply receiver was here
 
         // create new event if needed referring remote peer as other-parent
         let mut local_core = core.write().unwrap();
         let creator = local_core.conf.read().unwrap().get_creator();
-        debug!(
-            "{}: create new event",
-            config
-                .read()
-                .unwrap()
-                .peers
-                .find_peer(&creator)
-                .unwrap()
-                .get_base_addr()
-        );
+        debug!("{}: create new event", me);
         let height = config
             .write()
             .unwrap()
@@ -254,10 +245,10 @@ where
             height,
             peer.id.clone(),
             config
-                .write()
+                .read()
                 .unwrap()
                 .peers
-                .find_peer_mut(&peer.id)
+                .find_peer(&peer.id)
                 .unwrap()
                 .get_height()
         );
@@ -366,20 +357,20 @@ where
                     .unwrap()
                     .update_lamport_time(sync_req.lamport_time);
             }
-            debug!(
-                "{}: lamport time update: {}",
-                me.clone(),
+            debug!("{}: lamport time update: {}", me.clone(), {
                 core.read().unwrap().get_lamport_time()
-            );
-            match store
-                .read()
-                .unwrap()
-                .get_events_for_gossip(&sync_req.gossip_list)
-            {
+            });
+            match {
+                store
+                    .read()
+                    .unwrap()
+                    .get_events_for_gossip(&sync_req.gossip_list)
+            } {
                 Err(e) => error!("Procedure B: get_events_for_gossip() error: {:?}", e),
                 Ok(events) => {
                     debug!("{}: got events for gossip", me.clone());
-                    let gossip_list: GossipList<P> = config.read().unwrap().peers.get_gossip_list();
+                    let gossip_list: GossipList<P> =
+                        { config.read().unwrap().peers.get_gossip_list() };
                     debug!("{}: got gossip list", me.clone());
                     let reply = SyncReply::<D, P, PK, Sig> {
                         from: sync_req.to,
@@ -556,13 +547,17 @@ where
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let myself = Pin::get_mut(self);
         let mut core = myself.core.write().unwrap();
+        let me = { core.conf.read().unwrap().get_request_addr() };
+        debug!("o {}: check last finalised frame", me.clone());
         let last_finalised_frame: FrameNumber = match core.last_finalised_frame {
             None => {
                 core.conf.write().unwrap().waker = Some(cx.waker().clone());
+                debug!("o{}: poll pending", me);
                 return Poll::Pending;
             }
             Some(x) => x,
         };
+        debug!("o {}: check current frame", me.clone());
         let mut current_frame: FrameNumber = match core.current_frame {
             None => 0,
             Some(x) => x,
@@ -571,6 +566,7 @@ where
             None => {
                 if current_frame >= last_finalised_frame {
                     core.conf.write().unwrap().waker = Some(cx.waker().clone());
+                    debug!("o{}: no more finalised frames yet", me);
                     return Poll::Pending;
                 }
                 current_frame += 1;
@@ -583,16 +579,17 @@ where
             Some(x) => x,
         };
 
-        let frame = core.store.read().unwrap().get_frame(current_frame).unwrap();
+        let frame = { core.store.read().unwrap().get_frame(current_frame).unwrap() };
         let n_events = frame.events.len();
 
         let event_record = frame.events[current_event];
-        let mut event = core
-            .store
-            .read()
-            .unwrap()
-            .get_event(&event_record.hash)
-            .unwrap();
+        let mut event = {
+            core.store
+                .read()
+                .unwrap()
+                .get_event(&event_record.hash)
+                .unwrap()
+        };
 
         let n_tx = event.transactions.len();
         let data = event.transactions.swap_remove(current_tx);
@@ -610,6 +607,7 @@ where
             }
         }
 
+        debug!("o {}: delivering data", me);
         Poll::Ready(Some(data))
     }
 }
@@ -922,5 +920,10 @@ mod tests {
         );
 
         println!("Shutting down DAGs");
+        DAG1.shutdown().unwrap();
+        DAG2.shutdown().unwrap();
+        DAG3.shutdown().unwrap();
+        DAG4.shutdown().unwrap();
+        DAG5.shutdown().unwrap();
     }
 }
