@@ -179,6 +179,14 @@ block_on(async {
 });
 ```
 
+#### Shutdown DAGs
+```rust
+DAG1.shutdown();
+DAG2.shutdown();
+DAG3.shutdown();
+DAG4.shutdown();
+DAG5.shutdown();
+```
 ---
 
 ## RFCs
