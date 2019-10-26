@@ -270,12 +270,20 @@ where
         );
         if peer_size == creator_visibilis_flag_table.len() {
             let frame_upto = min_frame(&visibilis_flag_table);
-            for frame in first_not_finalised_frame..frame_upto {
+            debug!(
+                "{}: first not finalised frame:{}; frame up to: {}",
+                self.me_a(),
+                first_not_finalised_frame,
+                frame_upto
+            );
+            for frame in first_not_finalised_frame..(frame_upto + 1) {
                 // FIXME: need to be implemented
                 //self.finalise_frame(frame)
                 self.last_finalised_frame = Some(frame);
+                debug!("{}: finalised frame: {}", self.me_a(), frame);
                 // notify consumer on next transaction in consensus availability
                 if let Some(waker) = { self.conf.write().unwrap().waker.take() } {
+                    debug!("{}: calling waker", self.me_a());
                     waker.wake();
                 }
             }

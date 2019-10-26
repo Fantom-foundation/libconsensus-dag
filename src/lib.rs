@@ -560,7 +560,7 @@ where
         let last_finalised_frame: FrameNumber = match core.last_finalised_frame {
             None => {
                 core.conf.write().unwrap().waker = Some(cx.waker().clone());
-                debug!("o{}: poll pending", me);
+                debug!("o {}: poll pending", me);
                 return Poll::Pending;
             }
             Some(x) => x,
@@ -574,7 +574,7 @@ where
             None => {
                 if current_frame >= last_finalised_frame {
                     core.conf.write().unwrap().waker = Some(cx.waker().clone());
-                    debug!("o{}: no more finalised frames yet", me);
+                    debug!("o {}: no more finalised frames yet", me);
                     return Poll::Pending;
                 }
                 current_frame += 1;
