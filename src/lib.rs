@@ -164,6 +164,8 @@ where
     Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK> + 'static,
 {
     let config = { core.read().unwrap().conf.clone() };
+    let store = { core.read().unwrap().store.clone() };
+    let creator = { config.read().unwrap().get_creator() };
     let mut ticker = {
         let cfg = config.read().unwrap();
         thread::sleep(Duration::from_millis(cfg.get_proc_a_delay()));
@@ -229,8 +231,6 @@ where
         // Sync Reply receiver was here
 
         // create new event if needed referring remote peer as other-parent
-        let mut local_core = core.write().unwrap();
-        let creator = { local_core.conf.read().unwrap().get_creator() };
         debug!("{}: create new event", me);
         let height = {
             config
@@ -259,12 +259,12 @@ where
             other_height,
         );
         let (other_parent_event, self_parent_event) = {
-            let store = local_core.store.read().unwrap();
+            let store_local = store.read().unwrap();
             (
-                store
+                store_local
                     .get_event_of_creator(peer.id.clone(), other_height)
                     .unwrap(),
-                store
+                store_local
                     .get_event_of_creator(creator.clone(), height - 1)
                     .unwrap(),
             )
@@ -272,9 +272,14 @@ where
         debug!("{}: parent events read", me.clone());
         let self_parent = self_parent_event.hash;
         let other_parent = other_parent_event.hash;
-        let lamport_timestamp = local_core.get_next_lamport_time();
-        let transactions = local_core.next_transactions();
-        let internal_transactions = local_core.next_internal_transactions();
+        let (lamport_timestamp, transactions, internal_transactions) = {
+            let mut local_core = core.write().unwrap();
+            (
+                local_core.get_next_lamport_time(),
+                local_core.next_transactions(),
+                local_core.next_internal_transactions(),
+            )
+        };
         let mut event: Event<D, P, PK, Sig> = Event::new(
             creator.clone(),
             height,
@@ -286,7 +291,7 @@ where
         );
         debug!("{}: event formed: {}", me.clone(), event.clone());
         let ex = event.event_hash().unwrap();
-        let rc = local_core.insert_event(event).unwrap();
+        let rc = { core.write().unwrap().insert_event(event).unwrap() };
         if !rc {
             error!("Error inserting new event {:?}", ex);
         }
