@@ -124,7 +124,7 @@ fn listener<P, Data, SK, PK, Sig>(
                         let event: Event<Data, P, PK, Sig> = ev.into();
                         // check if event is valid
                         if !{ core.read().unwrap().check_event(&event).unwrap() } {
-                            error!("Event {} is not valid", event);
+                            error!("{}: Event {} is not valid", me.clone(), event);
                             continue;
                         }
                         let lamport_time = event.get_lamport_time();

@@ -387,6 +387,6 @@ where
     }
 
     pub(crate) fn get_creator_id(&self) -> P {
-        self.peers[0].id.clone()
+        self.peers[self.current].id.clone()
     }
 }
