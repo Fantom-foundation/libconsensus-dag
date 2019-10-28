@@ -384,7 +384,7 @@ fn procedure_b<P, D, SK, PK, Sig>(
                             let res = sync_reply_sender.send(address, reply);
                             match res {
                                 Ok(()) => {}
-                                Err(e) => error!("error sendinf sync reply: {:?}", e),
+                                Err(e) => error!("error sending sync reply: {:?}", e),
                             }
                             debug!("{}: SyncReply sent", me.clone());
                         }
@@ -805,19 +805,19 @@ mod tests {
         consensus_config5.secret_key = kp5.1;
         consensus_config5.peers = peer_list.clone();
 
-        let mut DAG1 =
+        let mut dag1 =
             DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config1)
                 .unwrap();
-        let mut DAG2 =
+        let mut dag2 =
             DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config2)
                 .unwrap();
-        let mut DAG3 =
+        let mut dag3 =
             DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config3)
                 .unwrap();
-        let mut DAG4 =
+        let mut dag4 =
             DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config4)
                 .unwrap();
-        let mut DAG5 =
+        let mut dag5 =
             DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config5)
                 .unwrap();
 
@@ -829,50 +829,50 @@ mod tests {
             Data { byte: 5 },
         ];
 
-        DAG1.send_transaction(data[0].clone()).unwrap();
+        dag1.send_transaction(data[0].clone()).unwrap();
         println!("d1 transaction sent");
-        DAG2.send_transaction(data[1].clone()).unwrap();
+        dag2.send_transaction(data[1].clone()).unwrap();
         println!("d2 transaction sent");
-        DAG3.send_transaction(data[2].clone()).unwrap();
+        dag3.send_transaction(data[2].clone()).unwrap();
         println!("d3 transaction sent");
-        DAG4.send_transaction(data[3].clone()).unwrap();
+        dag4.send_transaction(data[3].clone()).unwrap();
         println!("d4 transaction sent");
-        DAG5.send_transaction(data[4].clone()).unwrap();
+        dag5.send_transaction(data[4].clone()).unwrap();
         println!("d5 transaction sent");
 
         let mut res1: [Data; 5] = [0.into(); 5];
 
         block_on(async {
             res1 = [
-                match DAG1.next().await {
+                match dag1.next().await {
                     Some(d) => {
                         println!("DAG1: data[0] OK");
                         d
                     }
                     None => panic!("unexpected None"),
                 },
-                match DAG1.next().await {
+                match dag1.next().await {
                     Some(d) => {
                         println!("DAG1: data[1] OK");
                         d
                     }
                     None => panic!("unexpected None"),
                 },
-                match DAG1.next().await {
+                match dag1.next().await {
                     Some(d) => {
                         println!("DAG1: data[2] OK");
                         d
                     }
                     None => panic!("unexpected None"),
                 },
-                match DAG1.next().await {
+                match dag1.next().await {
                     Some(d) => {
                         println!("DAG1: data[3] OK");
                         d
                     }
                     None => panic!("unexpected None"),
                 },
-                match DAG1.next().await {
+                match dag1.next().await {
                     Some(d) => {
                         println!("DAG1: data[4] OK");
                         d
@@ -882,89 +882,89 @@ mod tests {
             ];
 
             // check DAG2
-            match DAG2.next().await {
+            match dag2.next().await {
                 Some(d) => assert_eq!(d, res1[0]),
                 None => panic!("unexpected None"),
             };
-            match DAG2.next().await {
+            match dag2.next().await {
                 Some(d) => assert_eq!(d, res1[1]),
                 None => panic!("unexpected None"),
             };
-            match DAG2.next().await {
+            match dag2.next().await {
                 Some(d) => assert_eq!(d, res1[2]),
                 None => panic!("unexpected None"),
             };
-            match DAG2.next().await {
+            match dag2.next().await {
                 Some(d) => assert_eq!(d, res1[3]),
                 None => panic!("unexpected None"),
             };
-            match DAG2.next().await {
+            match dag2.next().await {
                 Some(d) => assert_eq!(d, res1[4]),
                 None => panic!("unexpected None"),
             };
 
             // check DAG3
-            match DAG3.next().await {
+            match dag3.next().await {
                 Some(d) => assert_eq!(d, res1[0]),
                 None => panic!("unexpected None"),
             };
-            match DAG3.next().await {
+            match dag3.next().await {
                 Some(d) => assert_eq!(d, res1[1]),
                 None => panic!("unexpected None"),
             };
-            match DAG3.next().await {
+            match dag3.next().await {
                 Some(d) => assert_eq!(d, res1[2]),
                 None => panic!("unexpected None"),
             };
-            match DAG3.next().await {
+            match dag3.next().await {
                 Some(d) => assert_eq!(d, res1[3]),
                 None => panic!("unexpected None"),
             };
-            match DAG3.next().await {
+            match dag3.next().await {
                 Some(d) => assert_eq!(d, res1[4]),
                 None => panic!("unexpected None"),
             };
 
             // check DAG4
-            match DAG4.next().await {
+            match dag4.next().await {
                 Some(d) => assert_eq!(d, res1[0]),
                 None => panic!("unexpected None"),
             };
-            match DAG4.next().await {
+            match dag4.next().await {
                 Some(d) => assert_eq!(d, res1[1]),
                 None => panic!("unexpected None"),
             };
-            match DAG4.next().await {
+            match dag4.next().await {
                 Some(d) => assert_eq!(d, res1[2]),
                 None => panic!("unexpected None"),
             };
-            match DAG4.next().await {
+            match dag4.next().await {
                 Some(d) => assert_eq!(d, res1[3]),
                 None => panic!("unexpected None"),
             };
-            match DAG4.next().await {
+            match dag4.next().await {
                 Some(d) => assert_eq!(d, res1[4]),
                 None => panic!("unexpected None"),
             };
 
             // check DAG5
-            match DAG5.next().await {
+            match dag5.next().await {
                 Some(d) => assert_eq!(d, res1[0]),
                 None => panic!("unexpected None"),
             };
-            match DAG5.next().await {
+            match dag5.next().await {
                 Some(d) => assert_eq!(d, res1[1]),
                 None => panic!("unexpected None"),
             };
-            match DAG5.next().await {
+            match dag5.next().await {
                 Some(d) => assert_eq!(d, res1[2]),
                 None => panic!("unexpected None"),
             };
-            match DAG5.next().await {
+            match dag5.next().await {
                 Some(d) => assert_eq!(d, res1[3]),
                 None => panic!("unexpected None"),
             };
-            match DAG5.next().await {
+            match dag5.next().await {
                 Some(d) => assert_eq!(d, res1[4]),
                 None => panic!("unexpected None"),
             };
@@ -977,10 +977,10 @@ mod tests {
         );
 
         println!("Shutting down DAGs");
-        DAG1.shutdown().unwrap();
-        DAG2.shutdown().unwrap();
-        DAG3.shutdown().unwrap();
-        DAG4.shutdown().unwrap();
-        DAG5.shutdown().unwrap();
+        dag1.shutdown().unwrap();
+        dag2.shutdown().unwrap();
+        dag3.shutdown().unwrap();
+        dag4.shutdown().unwrap();
+        dag5.shutdown().unwrap();
     }
 }

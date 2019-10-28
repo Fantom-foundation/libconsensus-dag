@@ -283,7 +283,7 @@ where
         &mut self.peers
     }
     fn sort_peers(&mut self) {
-        let creator = self.creator.clone();
+//        let creator = self.creator.clone();
         self.peers_mut().sort_by(|a, b| {
             use std::cmp::Ordering;
             if a.id < b.id {
