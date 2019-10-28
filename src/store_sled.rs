@@ -169,6 +169,7 @@ where
                 height += 1;
             }
         }
+        events.sort_by(|a, b| a.lamport_timestamp.cmp(&b.lamport_timestamp));
         debug!("got events for gossip: {}", events.len());
         Ok(events)
     }
