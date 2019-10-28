@@ -43,6 +43,7 @@ where
     pub(crate) last_finalised_frame: Option<FrameNumber>,
     me_a: String,
     me_b: String,
+    pub(crate) shutdown: bool,
 }
 
 impl<P, Data, SK, PK, Sig> DAGcore<P, Data, SK, PK, Sig>
@@ -85,6 +86,7 @@ where
             last_finalised_frame: None,
             me_a,
             me_b,
+            shutdown: false,
         };
         // Set creator for peer list
         {
@@ -114,6 +116,12 @@ where
             }
         }
         core
+    }
+    pub fn check_quit(&mut self) -> bool {
+        self.shutdown
+    }
+    pub(crate) fn set_shutdown(&mut self, shutdown: bool) {
+        self.shutdown = shutdown;
     }
     pub(crate) fn me_a(&self) -> String {
         self.me_a.clone()

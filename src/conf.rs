@@ -18,7 +18,6 @@ where
 {
     pub request_addr: String,
     pub reply_addr: String,
-    pub(crate) shutdown: bool,
     pub transport_type: TransportType,
     pub store_type: StoreType,
     // heartbeat duration in milliseconds
@@ -68,9 +67,6 @@ where
     pub fn get_request_addr(&self) -> String {
         self.request_addr.clone()
     }
-    pub fn check_quit(&mut self) -> bool {
-        self.shutdown
-    }
 }
 
 impl<P, Data, SK, PK> ConsensusConfiguration<Data> for DAGconfig<P, Data, SK, PK>
@@ -85,7 +81,6 @@ where
             reply_addr: "localhost:12000".to_string(),
             heartbeat: 1000,
             proc_a_delay: 1000,
-            shutdown: false,
             transport_type: TransportType::Unknown,
             store_type: StoreType::Unknown,
             waker: None,

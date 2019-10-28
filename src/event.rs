@@ -51,7 +51,7 @@ where
     pub(crate) height: Height,
     self_parent: EventHash,
     other_parent: EventHash,
-    lamport_timestamp: LamportTime,
+    pub(crate) lamport_timestamp: LamportTime,
     transactions: Vec<Data>,
     #[serde(bound = "")]
     internal_transactions: Vec<InternalTransaction<P, PK>>,

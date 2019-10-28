@@ -17,15 +17,15 @@ serde_derive = "1.0.101"
 serde_json = "1.0.41"
 sled = { git = "https://github.com/Fantom-foundation/sled", version = "0.28.3" }
 to_vec = "0.1.0"
-libconsensus = { git = "https://github.com/Fantom-foundation/libconsensus" }
-libtransport = { git = "https://github.com/Fantom-foundation/libtransport" }
-libtransport-tcp = { git = "https://github.com/Fantom-foundation/libtransport-tcp" }
+libconsensus = { git = "https://github.com/Fantom-foundation/libconsensus", version="~0.0.7" }
+libtransport = { git = "https://github.com/Fantom-foundation/libtransport", version="~0.0.4" }
+libtransport-tcp = { git = "https://github.com/Fantom-foundation/libtransport-tcp", version="~0.0.5" }
 libcommon-rs = { git = "https://github.com/Fantom-foundation/libcommon-rs" }
 futures-preview = { version = "0.3.0-alpha.19", features = ["compat"] }
 libhash = { git = "https://github.com/Fantom-foundation/libhash" }
-libhash-sha3 = { git = "https://github.com/Fantom-foundation/libhash-sha3", version="0.1.1" }
-libsignature = { git = "https://github.com/Fantom-foundation/libsignature", version="0.2.0" }
+libhash-sha3 = { git = "https://github.com/Fantom-foundation/libhash-sha3", version="~0.1.1" }
+libsignature = { git = "https://github.com/Fantom-foundation/libsignature", version="~0.2.0" }
 failure = "0.1.5"
 
 [dev-dependencies]
-libsignature-ed25519-dalek = { git = "https://github.com/Fantom-foundation/libsignature-ed25519-dalek", version="0.2.2" }
+libsignature-ed25519-dalek = { git = "https://github.com/Fantom-foundation/libsignature-ed25519-dalek", version="~0.2.2" }

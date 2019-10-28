@@ -61,12 +61,18 @@ where
     proc_a_handle: Option<JoinHandle<()>>,
     proc_b_handle: Option<JoinHandle<()>>,
 
-    quit_tx: Sender<()>,
+    quit_txs: Vec<Sender<()>>,
 }
 
 fn listener<P, Data, SK, PK, Sig>(
     core: Arc<RwLock<DAGcore<P, Data, SK, PK, Sig>>>,
     quit_rx: Receiver<()>,
+    sync_reply_receiver: &mut dyn TransportReceiver<
+        P,
+        SyncReply<Data, P, PK, Sig>,
+        Error,
+        DAGPeerList<P, PK>,
+    >,
 ) where
     Data: DataType + 'static,
     P: PeerId + 'static,
@@ -77,22 +83,8 @@ fn listener<P, Data, SK, PK, Sig>(
     let config = { core.read().unwrap().conf.clone() };
     // FIXME: what we do with unwrap() in threads?
 
-    let (transport_type, reply_bind_address) = {
-        let cfg = config.read().unwrap();
-        (cfg.transport_type.clone(), cfg.reply_addr.clone())
-    };
     let me = { core.read().unwrap().me_a() };
 
-    let mut sync_reply_receiver = {
-        match transport_type {
-            libtransport::TransportType::TCP => {
-                let x: TCPreceiver<P, SyncReply<Data, P, PK, Sig>, Error, DAGPeerList<P, PK>> =
-                    TCPreceiver::new(reply_bind_address).unwrap();
-                x
-            }
-            libtransport::TransportType::Unknown => panic!("unknown transport"),
-        }
-    };
     debug!("{}: listener started", me.clone());
 
     loop {
@@ -100,8 +92,7 @@ fn listener<P, Data, SK, PK, Sig>(
         //debug!("{}: listener loop start", me.clone());
         match quit_rx.try_recv() {
             Ok(_) | Err(TryRecvError::Disconnected) => {
-                let mut cfg = config.write().unwrap();
-                cfg.shutdown = true;
+                core.write().unwrap().set_shutdown(true);
                 break;
             }
             Err(TryRecvError::Empty) => {}
@@ -195,7 +186,7 @@ where
         // check if shutdown() has been called
         let mut cfg = config.write().unwrap();
         debug!("{} checking quit condition", me.clone());
-        if cfg.check_quit() {
+        if core.write().unwrap().check_quit() {
             debug!("{}: terminating proc_a", me.clone());
             // terminating
             // FIXME: need to be implemented
@@ -425,62 +416,62 @@ where
 
     fn new(cfg: DAGconfig<P, D, SK, PK>) -> BaseResult<DAG<P, D, SK, PK, Sig>> {
         let (tx, rx) = mpsc::channel();
-        //cfg.set_quit_rx(rx);
-        //        let bind_addr = cfg.request_addr.clone();
-        //        let reply_addr = cfg.reply_addr.clone();
-        //        let transport_type = cfg.transport_type.clone();
-        //        let mut sr_transport = {
-        //            match transport_type {
-        //                libtransport::TransportType::TCP => {
-        //                    TCPtransport::<P, SyncReq<P>, Error, DAGPeerList<P, PK>>::new(bind_addr)?
-        //                }
-        //                libtransport::TransportType::Unknown => panic!("unknown transport"),
-        //            }
-        //        };
-        //        let mut sp_transport = {
-        //            match transport_type {
-        //                libtransport::TransportType::TCP => {
-        //                    TCPtransport::<P, SyncReply<D, P, PK, Sig>, Error, DAGPeerList<P, PK>>::new(
-        //                        reply_addr,
-        //                    )?
-        //                }
-        //                libtransport::TransportType::Unknown => panic!("unknown transport"),
-        //            }
-        //        };
+
+        let (transport_type, reply_bind_address) =
+            (cfg.transport_type.clone(), cfg.reply_addr.clone());
+        let mut sync_reply_receiver = {
+            match transport_type {
+                libtransport::TransportType::TCP => {
+                    let x: TCPreceiver<P, SyncReply<D, P, PK, Sig>, Error, DAGPeerList<P, PK>> =
+                        TCPreceiver::new(reply_bind_address).unwrap();
+                    x
+                }
+                libtransport::TransportType::Unknown => panic!("unknown transport"),
+            }
+        };
+        let srr_tx = sync_reply_receiver.get_quit_tx();
 
         let core = Arc::new(RwLock::new(DAGcore::new(cfg)));
 
-        //        let cfg_mutexed = Arc::new(Mutex::new(cfg));
-        //        let config = Arc::clone(&cfg_mutexed);
-        let listener_core = core.clone();
-        let handle = thread::Builder::new()
-            .name("listener".to_string())
-            .stack_size(1024 * 1024)
-            .spawn(|| listener(listener_core, rx))?;
+        let handle = {
+            let listener_core = core.clone();
+            thread::Builder::new()
+                .name("listener".to_string())
+                .stack_size(1024 * 1024)
+                .spawn(move || listener(listener_core, rx, &mut sync_reply_receiver))?
+        };
         //        let configA = Arc::clone(&cfg_mutexed);
         let core_a = core.clone();
         let proc_a_handle = thread::Builder::new()
             .name("procedure_a".to_string())
             .stack_size(4 * 1024 * 1024)
-            .spawn(|| procedure_a(core_a))?;
+            .spawn(move || procedure_a(core_a))?;
         //        let configB = Arc::clone(&cfg_mutexed);
         let core_b = core.clone();
         let proc_b_handle = thread::Builder::new()
             .name("procedure_b".to_string())
             .stack_size(4 * 1024 * 1024 * 1024)
-            .spawn(|| procedure_b(core_b))?;
-        Ok(DAG {
+            .spawn(move || procedure_b(core_b))?;
+        let mut dag = DAG {
             core,
-            quit_tx: tx,
             listener_handle: Some(handle),
             proc_a_handle: Some(proc_a_handle),
             proc_b_handle: Some(proc_b_handle),
-        })
+            quit_txs: Vec::with_capacity(3),
+        };
+        dag.set_quit_tx(tx);
+        match srr_tx {
+            None => {},
+            Some(x) => dag.set_quit_tx(x),
+        };
+        Ok(dag)
     }
 
     // Terminates procedures A and B of DAG0 started with run() method.
     fn shutdown(&mut self) -> BaseResult<()> {
-        let _ = self.quit_tx.send(());
+        for tx in self.quit_txs.iter() {
+            let _ = tx.send(());
+        }
         Ok(())
     }
 
@@ -499,17 +490,36 @@ where
     Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK>,
 {
     fn drop(&mut self) {
-        self.quit_tx.send(()).unwrap();
+        let me = self.core.read().unwrap().me_a();
+        for tx in self.quit_txs.iter() {
+            let _ = tx.send(());
+        }
+        debug!("d {}: shutting down listener", me.clone());
         if let Some(listener_handle) = self.listener_handle.take() {
             listener_handle
                 .join()
                 .expect("Couldn't join on the listener thread.");
         }
+        debug!("d {}: shutting down procedure A", me.clone());
         if let Some(proc_a_handle) = self.proc_a_handle.take() {
             proc_a_handle
                 .join()
                 .expect("Couldn't join on the procedure A thread.");
         }
+        if let Some(waker) = self
+            .core
+            .write()
+            .unwrap()
+            .conf
+            .write()
+            .unwrap()
+            .waker
+            .take()
+        {
+            debug!("d {}: calling waker", me.clone());
+            waker.wake();
+        }
+        debug!("d {}: shutting down procedure B", me.clone());
         if let Some(proc_b_handle) = self.proc_b_handle.take() {
             proc_b_handle
                 .join()
@@ -530,6 +540,9 @@ where
     fn send_internal_transaction(&mut self, tx: InternalTransaction<P, PK>) -> Result<()> {
         let mut core = self.core.write().unwrap();
         core.add_internal_transaction(tx)
+    }
+    pub(crate) fn set_quit_tx(&mut self, tx: Sender<()>) {
+        self.quit_txs.push(tx);
     }
 }
 
@@ -556,6 +569,10 @@ where
         let myself = Pin::get_mut(self);
         let mut core = myself.core.write().unwrap();
         let me = core.me_a();
+        if core.check_quit() {
+            debug!("o {}: terminating stream", me);
+            return Poll::Ready(None);
+        }
         let mut data: Option<Self::Item> = None;
         debug!("o {}: check last finalised frame", me.clone());
         let last_finalised_frame: FrameNumber = match core.last_finalised_frame {
@@ -634,6 +651,7 @@ where
             }
         }
 
+        core.conf.write().unwrap().waker = Some(cx.waker().clone());
         debug!("o {}: delivering data", me);
         Poll::Ready(data)
     }
