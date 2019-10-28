@@ -556,6 +556,7 @@ where
         let myself = Pin::get_mut(self);
         let mut core = myself.core.write().unwrap();
         let me = core.me_a();
+        let mut data: Option<Self::Item> = None;
         debug!("o {}: check last finalised frame", me.clone());
         let last_finalised_frame: FrameNumber = match core.last_finalised_frame {
             None => {
@@ -565,58 +566,76 @@ where
             }
             Some(x) => x,
         };
-        debug!("o {}: check current frame", me.clone());
-        let mut current_frame: FrameNumber = match core.current_frame {
-            None => 0,
-            Some(x) => x,
-        };
-        let mut current_event = match core.current_event {
-            None => {
-                if current_frame >= last_finalised_frame {
-                    core.conf.write().unwrap().waker = Some(cx.waker().clone());
-                    debug!("o {}: no more finalised frames yet", me);
-                    return Poll::Pending;
+
+        loop {
+            debug!("o {}: check current frame", me.clone());
+            let mut current_frame: FrameNumber = match core.current_frame {
+                None => 0,
+                Some(x) => x,
+            };
+            debug!(
+                "o {}: current_frame:{}; last_finalised_frame:{}",
+                me.clone(),
+                current_frame,
+                last_finalised_frame
+            );
+            let mut current_event = match core.current_event {
+                None => {
+                    if current_frame >= last_finalised_frame {
+                        core.conf.write().unwrap().waker = Some(cx.waker().clone());
+                        debug!("o {}: no more finalised frames yet", me);
+                        return Poll::Pending;
+                    }
+                    current_frame += 1;
+                    0
                 }
-                current_frame += 1;
-                0
-            }
-            Some(x) => x,
-        };
-        let mut current_tx = match core.current_tx {
-            None => 0,
-            Some(x) => x,
-        };
+                Some(x) => x,
+            };
+            let mut current_tx = match core.current_tx {
+                None => 0,
+                Some(x) => x,
+            };
 
-        let frame = { core.store.read().unwrap().get_frame(current_frame).unwrap() };
-        let n_events = frame.events.len();
+            let frame = { core.store.read().unwrap().get_frame(current_frame).unwrap() };
+            let n_events = frame.events.len();
 
-        let event_record = frame.events[current_event];
-        let mut event = {
-            core.store
-                .read()
-                .unwrap()
-                .get_event(&event_record.hash)
-                .unwrap()
-        };
+            let event_record = frame.events[current_event];
+            let mut event = {
+                core.store
+                    .read()
+                    .unwrap()
+                    .get_event(&event_record.hash)
+                    .unwrap()
+            };
+            debug!("o {}: current event: {}", me.clone(), event.clone());
 
-        let n_tx = event.transactions.len();
-        let data = event.transactions.swap_remove(current_tx);
-        current_tx += 1;
-        if current_tx < n_tx {
-            core.current_tx = Some(current_tx);
-        } else {
-            core.current_tx = Some(0);
-            current_event += 1;
-            if current_event < n_events {
-                core.current_event = Some(current_event);
+            let n_tx = event.transactions.len();
+            debug!("o {}: n_tx:{}", me.clone(), n_tx);
+            if n_tx > 0 {
+                data = Some(event.transactions.swap_remove(current_tx));
             } else {
-                core.current_event = None;
-                core.current_frame = Some(current_frame + 1);
+                debug!("o {}: event with no txs", me);
+            }
+            current_tx += 1;
+            if current_tx < n_tx {
+                core.current_tx = Some(current_tx);
+            } else {
+                core.current_tx = Some(0);
+                current_event += 1;
+                if current_event < n_events {
+                    core.current_event = Some(current_event);
+                } else {
+                    core.current_event = None;
+                    core.current_frame = Some(current_frame + 1);
+                }
+            }
+            if data != None {
+                break;
             }
         }
 
         debug!("o {}: delivering data", me);
-        Poll::Ready(Some(data))
+        Poll::Ready(data)
     }
 }
 
