@@ -297,8 +297,10 @@ where
 }
 
 // Procedure B of DAG consensus
-fn procedure_b<P, D, SK, PK, Sig>(core: Arc<RwLock<DAGcore<P, D, SK, PK, Sig>>>)
-where
+fn procedure_b<P, D, SK, PK, Sig>(
+    core: Arc<RwLock<DAGcore<P, D, SK, PK, Sig>>>,
+    sync_req_receiver: &mut dyn TransportReceiver<P, SyncReq<P>, Error, DAGPeerList<P, PK>>,
+) where
     D: DataType + 'static,
     P: PeerId + 'static,
     SK: SecretKey,
@@ -315,15 +317,6 @@ where
         "procedure_b, request_bind_addr: {}",
         request_bind_address.clone()
     );
-    let mut sync_req_receiver = {
-        match transport_type {
-            libtransport::TransportType::TCP => {
-                TCPreceiver::<P, SyncReq<P>, Error, DAGPeerList<P, PK>>::new(request_bind_address)
-                    .unwrap()
-            }
-            libtransport::TransportType::Unknown => panic!("unknown transport"),
-        }
-    };
     let mut sync_reply_sender = {
         match transport_type {
             libtransport::TransportType::TCP => {
@@ -417,8 +410,11 @@ where
     fn new(cfg: DAGconfig<P, D, SK, PK>) -> BaseResult<DAG<P, D, SK, PK, Sig>> {
         let (tx, rx) = mpsc::channel();
 
-        let (transport_type, reply_bind_address) =
-            (cfg.transport_type.clone(), cfg.reply_addr.clone());
+        let (transport_type, reply_bind_address, request_bind_address) = (
+            cfg.transport_type.clone(),
+            cfg.reply_addr.clone(),
+            cfg.request_addr.clone(),
+        );
         let mut sync_reply_receiver = {
             match transport_type {
                 libtransport::TransportType::TCP => {
@@ -430,6 +426,19 @@ where
             }
         };
         let srr_tx = sync_reply_receiver.get_quit_tx();
+
+        let mut sync_req_receiver = {
+            match transport_type {
+                libtransport::TransportType::TCP => {
+                    TCPreceiver::<P, SyncReq<P>, Error, DAGPeerList<P, PK>>::new(
+                        request_bind_address,
+                    )
+                    .unwrap()
+                }
+                libtransport::TransportType::Unknown => panic!("unknown transport"),
+            }
+        };
+        let syr_tx = sync_req_receiver.get_quit_tx();
 
         let core = Arc::new(RwLock::new(DAGcore::new(cfg)));
 
@@ -451,7 +460,7 @@ where
         let proc_b_handle = thread::Builder::new()
             .name("procedure_b".to_string())
             .stack_size(4 * 1024 * 1024 * 1024)
-            .spawn(move || procedure_b(core_b))?;
+            .spawn(move || procedure_b(core_b, &mut sync_req_receiver))?;
         let mut dag = DAG {
             core,
             listener_handle: Some(handle),
@@ -461,7 +470,11 @@ where
         };
         dag.set_quit_tx(tx);
         match srr_tx {
-            None => {},
+            None => {}
+            Some(x) => dag.set_quit_tx(x),
+        };
+        match syr_tx {
+            None => {}
             Some(x) => dag.set_quit_tx(x),
         };
         Ok(dag)
