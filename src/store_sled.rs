@@ -93,6 +93,16 @@ where
         }
     }
 
+    fn set_frame(&mut self, frame_number: FrameNumber, frame: Frame) -> Result<()> {
+        let f_bytes = serialize(&frame)?;
+        let frame_key = format!("{}", frame_number).into_bytes();
+        self.frame.insert(frame_key, f_bytes)?;
+        if self.sync {
+            self.frame.flush()?;
+        }
+        Ok(())
+    }
+
     fn get_frame(&self, frame_number: FrameNumber) -> Result<Frame> {
         let frame_key = format!("{}", frame_number).into_bytes();
         match self.frame.get(&*frame_key)? {

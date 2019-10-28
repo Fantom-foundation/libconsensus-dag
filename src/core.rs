@@ -277,8 +277,13 @@ where
                 frame_upto
             );
             for frame in first_not_finalised_frame..(frame_upto + 1) {
-                // FIXME: need to be implemented
                 //self.finalise_frame(frame)
+                {
+                    let mut store = self.store.write().unwrap();
+                    let mut frame_itself = store.get_frame(frame)?;
+                    frame_itself.finalise();
+                    store.set_frame(frame, frame_itself)?;
+                }
                 self.last_finalised_frame = Some(frame);
                 debug!("{}: finalised frame: {}", self.me_a(), frame);
                 // notify consumer on next transaction in consensus availability

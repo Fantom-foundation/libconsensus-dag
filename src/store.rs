@@ -48,6 +48,10 @@ where
     // Read FlagTable with EventHash
     fn get_flag_table(&self, ex: &EventHash) -> Result<FlagTable>;
 
+    // Writes Frame into storage with specified frame number
+    fn set_frame(&mut self, number: FrameNumber, frame: Frame) -> Result<()>;
+
+    // Read Frame with specified frame number
     fn get_frame(&self, frame: FrameNumber) -> Result<Frame>;
 
     fn get_events_for_gossip(
