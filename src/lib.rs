@@ -1,16 +1,43 @@
 #![feature(try_trait)]
 #![recursion_limit = "1024000"]
-#[global_allocator]
-static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
-
+extern crate env_logger;
 #[macro_use]
 extern crate failure;
-extern crate serde_derive;
+extern crate libconsensus;
 #[macro_use]
 extern crate log;
-extern crate env_logger;
-extern crate libconsensus;
+extern crate serde_derive;
 extern crate syslog;
+
+use std::pin::Pin;
+use std::sync::{Arc, RwLock};
+use std::sync::mpsc::{self, Sender};
+use std::sync::mpsc::{Receiver, TryRecvError};
+use std::thread;
+use std::thread::JoinHandle;
+use std::time::Duration;
+
+// reserved for DAG1
+//use crate::transactions::InternalTransaction;
+use futures::executor::block_on;
+use futures::stream::Stream;
+use futures::stream::StreamExt;
+use futures::task::Context;
+use futures::task::Poll;
+use libcommon_rs::data::DataType;
+use libcommon_rs::peer::Peer;
+use libcommon_rs::peer::PeerId;
+use libconsensus::Consensus;
+use libconsensus::errors::Result as BaseResult;
+use libhash_sha3::Hash as EventHash;
+use libsignature::{PublicKey, SecretKey};
+use libsignature::Signature;
+use libtransport::TransportReceiver;
+use libtransport::TransportSender;
+use libtransport_tcp::receiver::TCPreceiver;
+use libtransport_tcp::sender::TCPsender;
+use log::error;
+
 pub use crate::conf::DAGconfig;
 use crate::core::DAGcore;
 use crate::errors::Error;
@@ -22,42 +49,18 @@ pub use crate::peer::DAGPeerList;
 use crate::peer::FrameNumber;
 use crate::peer::GossipList;
 use crate::sync::{SyncReply, SyncReq};
-// reserved for DAG1
-//use crate::transactions::InternalTransaction;
-use futures::executor::block_on;
-use futures::stream::Stream;
-use futures::stream::StreamExt;
-use futures::task::Context;
-use futures::task::Poll;
-use libcommon_rs::data::DataType;
-use libcommon_rs::peer::Peer;
-use libcommon_rs::peer::PeerId;
-use libconsensus::errors::Result as BaseResult;
-use libconsensus::Consensus;
-use libhash_sha3::Hash as EventHash;
-use libsignature::Signature;
-use libsignature::{PublicKey, SecretKey};
-use libtransport::TransportReceiver;
-use libtransport::TransportSender;
-use libtransport_tcp::receiver::TCPreceiver;
-use libtransport_tcp::sender::TCPsender;
-use log::error;
-use std::pin::Pin;
-use std::sync::mpsc::{self, Sender};
-use std::sync::mpsc::{Receiver, TryRecvError};
-use std::sync::{Arc, RwLock};
-use std::thread;
-use std::thread::JoinHandle;
-use std::time::Duration;
+
+#[global_allocator]
+static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 // DAG node structure
 pub struct DAG<P, T, SK, PK, Sig>
-where
-    T: DataType,
-    P: PeerId,
-    SK: SecretKey,
-    PK: PublicKey,
-    Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK>,
+    where
+        T: DataType,
+        P: PeerId,
+        SK: SecretKey,
+        PK: PublicKey,
+        Sig: Signature<Hash=EventHash, PublicKey=PK, SecretKey=SK>,
 {
     core: Arc<RwLock<DAGcore<P, T, SK, PK, Sig>>>,
     listener_handle: Option<JoinHandle<()>>,
@@ -81,7 +84,7 @@ fn listener<P, Data, SK, PK, Sig>(
     P: PeerId + 'static,
     SK: SecretKey,
     PK: PublicKey + 'static,
-    Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK> + 'static,
+    Sig: Signature<Hash=EventHash, PublicKey=PK, SecretKey=SK> + 'static,
 {
     let config = { core.read().unwrap().conf.clone() };
     // FIXME: what we do with unwrap() in threads?
@@ -150,12 +153,12 @@ fn listener<P, Data, SK, PK, Sig>(
 
 // Procedure A of DAG consensus
 fn procedure_a<P, D, SK, PK, Sig>(core: Arc<RwLock<DAGcore<P, D, SK, PK, Sig>>>)
-where
-    D: DataType + 'static,
-    P: PeerId + 'static,
-    SK: SecretKey,
-    PK: PublicKey + 'static,
-    Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK> + 'static,
+    where
+        D: DataType + 'static,
+        P: PeerId + 'static,
+        SK: SecretKey,
+        PK: PublicKey + 'static,
+        Sig: Signature<Hash=EventHash, PublicKey=PK, SecretKey=SK> + 'static,
 {
     let config = { core.read().unwrap().conf.clone() };
     let store = { core.read().unwrap().store.clone() };
@@ -308,7 +311,7 @@ fn procedure_b<P, D, SK, PK, Sig>(
     P: PeerId + 'static,
     SK: SecretKey,
     PK: PublicKey + 'static,
-    Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK> + 'static,
+    Sig: Signature<Hash=EventHash, PublicKey=PK, SecretKey=SK> + 'static,
 {
     let config = { core.read().unwrap().conf.clone() };
     let (transport_type, request_bind_address) = {
@@ -401,12 +404,12 @@ fn procedure_b<P, D, SK, PK, Sig>(
 }
 
 impl<P, D, SK, PK, Sig> Consensus<'_, D> for DAG<P, D, SK, PK, Sig>
-where
-    P: PeerId + 'static,
-    D: DataType + 'static,
-    SK: SecretKey + 'static,
-    PK: PublicKey + 'static,
-    Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK> + 'static,
+    where
+        P: PeerId + 'static,
+        D: DataType + 'static,
+        SK: SecretKey + 'static,
+        PK: PublicKey + 'static,
+        Sig: Signature<Hash=EventHash, PublicKey=PK, SecretKey=SK> + 'static,
 {
     type Configuration = DAGconfig<P, D, SK, PK>;
 
@@ -436,7 +439,7 @@ where
                     TCPreceiver::<P, SyncReq<P>, Error, DAGPeerList<P, PK>>::new(
                         request_bind_address,
                     )
-                    .unwrap()
+                        .unwrap()
                 }
                 libtransport::TransportType::Unknown => panic!("unknown transport"),
             }
@@ -498,12 +501,12 @@ where
 }
 
 impl<P, D, SK, PK, Sig> Drop for DAG<P, D, SK, PK, Sig>
-where
-    D: DataType,
-    P: PeerId,
-    SK: SecretKey,
-    PK: PublicKey,
-    Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK>,
+    where
+        D: DataType,
+        P: PeerId,
+        SK: SecretKey,
+        PK: PublicKey,
+        Sig: Signature<Hash=EventHash, PublicKey=PK, SecretKey=SK>,
 {
     fn drop(&mut self) {
         let me = self.core.read().unwrap().me_a();
@@ -545,12 +548,12 @@ where
 }
 
 impl<P, D, SK, PK, Sig> DAG<P, D, SK, PK, Sig>
-where
-    D: DataType,
-    P: PeerId,
-    SK: SecretKey,
-    PK: PublicKey,
-    Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK>,
+    where
+        D: DataType,
+        P: PeerId,
+        SK: SecretKey,
+        PK: PublicKey,
+        Sig: Signature<Hash=EventHash, PublicKey=PK, SecretKey=SK>,
 {
     // FIXME: reserved for DAG1
     /// Sends internal transaction
@@ -564,22 +567,21 @@ where
 }
 
 impl<P, D, SK, PK, Sig> Unpin for DAG<P, D, SK, PK, Sig>
-where
-    D: DataType,
-    P: PeerId,
-    SK: SecretKey,
-    PK: PublicKey,
-    Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK>,
-{
-}
+    where
+        D: DataType,
+        P: PeerId,
+        SK: SecretKey,
+        PK: PublicKey,
+        Sig: Signature<Hash=EventHash, PublicKey=PK, SecretKey=SK>,
+{}
 
 impl<P, Data, SK, PK, Sig> Stream for DAG<P, Data, SK, PK, Sig>
-where
-    P: PeerId,
-    Data: DataType,
-    SK: SecretKey,
-    PK: PublicKey,
-    Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK>,
+    where
+        P: PeerId,
+        Data: DataType,
+        SK: SecretKey,
+        PK: PublicKey,
+        Sig: Signature<Hash=EventHash, PublicKey=PK, SecretKey=SK>,
 {
     type Item = Data;
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -689,14 +691,10 @@ mod transactions;
 
 #[cfg(test)]
 mod tests {
-    use crate::conf::DAGconfig;
-    use crate::libconsensus::Consensus;
-    use crate::libconsensus::ConsensusConfiguration;
-    pub use crate::peer::DAGPeer;
-    pub use crate::peer::DAGPeerList;
-    use crate::DAG;
-    use core::fmt::Display;
-    use core::fmt::Formatter;
+    use core::fmt::{Display, Formatter};
+    use std::iter;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
     use futures::executor::block_on;
     use futures::stream::StreamExt;
     use libcommon_rs::peer::Peer;
@@ -705,7 +703,18 @@ mod tests {
     use libsignature::Signature as LibSignature;
     use libsignature_ed25519_dalek::{PublicKey, SecretKey, Signature};
     use serde::{Deserialize, Serialize};
+
+    use syntax::util::map_in_place::MapInPlace;
+
+    use crate::conf::DAGconfig;
+    use crate::DAG;
+    use crate::libconsensus::Consensus;
+    use crate::libconsensus::ConsensusConfiguration;
+    pub use crate::peer::DAGPeer;
+    pub use crate::peer::DAGPeerList;
+
     type Id = PublicKey;
+
     #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Serialize, Deserialize, Hash, Copy)]
     struct Data {
         byte: i8,
@@ -734,117 +743,47 @@ mod tests {
         //            Some("test"),
         //        )
         //        .unwrap();
-
-        let kp1 = Signature::<EventHash>::generate_key_pair().unwrap();
-        let kp2 = Signature::<EventHash>::generate_key_pair().unwrap();
-        let kp3 = Signature::<EventHash>::generate_key_pair().unwrap();
-        let kp4 = Signature::<EventHash>::generate_key_pair().unwrap();
-        let kp5 = Signature::<EventHash>::generate_key_pair().unwrap();
-
         let mut peer_list = DAGPeerList::<Id, PublicKey>::default();
-        let mut peer1 = DAGPeer::<Id, PublicKey>::new(kp1.0.clone(), "127.0.0.1:9001".to_string());
-        peer1.set_public_key(kp1.0.clone());
-        let mut peer2 = DAGPeer::<Id, PublicKey>::new(kp2.0.clone(), "127.0.0.1:9003".to_string());
-        peer2.set_public_key(kp2.0.clone());
-        let mut peer3 = DAGPeer::<Id, PublicKey>::new(kp3.0.clone(), "127.0.0.1:9005".to_string());
-        peer3.set_public_key(kp3.0.clone());
-        let mut peer4 = DAGPeer::<Id, PublicKey>::new(kp4.0.clone(), "127.0.0.1:9007".to_string());
-        peer4.set_public_key(kp4.0.clone());
-        let mut peer5 = DAGPeer::<Id, PublicKey>::new(kp5.0.clone(), "127.0.0.1:9009".to_string());
-        peer5.set_public_key(kp5.0.clone());
 
-        peer_list.add(peer1).unwrap();
-        peer_list.add(peer2).unwrap();
-        peer_list.add(peer3).unwrap();
-        peer_list.add(peer4).unwrap();
-        peer_list.add(peer5).unwrap();
+        const N: usize = 5;
+        let dags: Vec<DAG<Id, Data, SecretKey, PublicKey, Signature<EventHash>>> = (0..N)
+            .map(|i| {
+                let kp = Signature::<EventHash>::generate_key_pair().unwrap();
+                let net_addr = &*format!("127.0.0.1:{}", 9001 + i);
+                let mut peer = DAGPeer::<Id, PublicKey>::new(kp.0.clone(), net_addr.to_string());
+                peer.set_public_key(kp.0.clone());
+                peer_list.add(peer).unwrap();
 
-        let mut consensus_config1 = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
-        consensus_config1.request_addr = "127.0.0.1:9001".to_string();
-        consensus_config1.reply_addr = "127.0.0.1:9002".to_string();
-        consensus_config1.transport_type = libtransport::TransportType::TCP;
-        consensus_config1.store_type = crate::store::StoreType::Sled;
-        consensus_config1.creator = kp1.0.clone();
-        consensus_config1.public_key = kp1.0;
-        consensus_config1.secret_key = kp1.1;
-        consensus_config1.peers = peer_list.clone();
+                let mut socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
 
-        let mut consensus_config2 = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
-        consensus_config2.request_addr = "127.0.0.1:9003".to_string();
-        consensus_config2.reply_addr = "127.0.0.1:9004".to_string();
-        consensus_config2.transport_type = libtransport::TransportType::TCP;
-        consensus_config2.store_type = crate::store::StoreType::Sled;
-        consensus_config2.creator = kp2.0.clone();
-        consensus_config2.public_key = kp2.0;
-        consensus_config2.secret_key = kp2.1;
-        consensus_config2.peers = peer_list.clone();
+                let mut socket: SocketAddr = net_addr.parse();
+                socket.set_port(if i <= N { socket.port() + 1 } else { socket.port() - 1 });
+                let next_net_addr = socket.to_string();
 
-        let mut consensus_config3 = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
-        consensus_config3.request_addr = "127.0.0.1:9005".to_string();
-        consensus_config3.reply_addr = "127.0.0.1:9006".to_string();
-        consensus_config3.transport_type = libtransport::TransportType::TCP;
-        consensus_config3.store_type = crate::store::StoreType::Sled;
-        consensus_config3.creator = kp3.0.clone();
-        consensus_config3.public_key = kp3.0;
-        consensus_config3.secret_key = kp3.1;
-        consensus_config3.peers = peer_list.clone();
+                let mut consensus_config = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
+                consensus_config.request_addr = net_addr.to_string();
+                consensus_config.reply_addr = next_net_addr;
+                consensus_config.transport_type = libtransport::TransportType::TCP;
+                consensus_config.store_type = crate::store::StoreType::Sled;
+                consensus_config.creator = kp.0.clone();
+                consensus_config.public_key = kp.0;
+                consensus_config.secret_key = kp.1;
+                consensus_config.peers = peer_list.clone();
 
-        let mut consensus_config4 = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
-        consensus_config4.request_addr = "127.0.0.1:9007".to_string();
-        consensus_config4.reply_addr = "127.0.0.1:9008".to_string();
-        consensus_config4.transport_type = libtransport::TransportType::TCP;
-        consensus_config4.store_type = crate::store::StoreType::Sled;
-        consensus_config4.creator = kp4.0.clone();
-        consensus_config4.public_key = kp4.0;
-        consensus_config4.secret_key = kp4.1;
-        consensus_config4.peers = peer_list.clone();
+                DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config)
+                    .unwrap()
+            })
+            .collect();
 
-        let mut consensus_config5 = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
-        consensus_config5.request_addr = "127.0.0.1:9009".to_string();
-        consensus_config5.reply_addr = "127.0.0.1:9010".to_string();
-        consensus_config5.transport_type = libtransport::TransportType::TCP;
-        consensus_config5.store_type = crate::store::StoreType::Sled;
-        consensus_config5.creator = kp5.0.clone();
-        consensus_config5.public_key = kp5.0;
-        consensus_config5.secret_key = kp5.1;
-        consensus_config5.peers = peer_list.clone();
 
-        let mut dag1 =
-            DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config1)
-                .unwrap();
-        let mut dag2 =
-            DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config2)
-                .unwrap();
-        let mut dag3 =
-            DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config3)
-                .unwrap();
-        let mut dag4 =
-            DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config4)
-                .unwrap();
-        let mut dag5 =
-            DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config5)
-                .unwrap();
+        let data: Vec<Data> = vec![0; N].iter().map(|i| Data { byte: i + 1 }).collect();
 
-        let data: [Data; 5] = [
-            Data { byte: 1 },
-            Data { byte: 2 },
-            Data { byte: 3 },
-            Data { byte: 4 },
-            Data { byte: 5 },
-        ];
+        (0..N).iter(|i| {
+            dags[i].send_transaction(data[i].clone()).unwrap();
+            println!("d{} transaction sent", data[i]);
+        });
 
-        dag1.send_transaction(data[0].clone()).unwrap();
-        println!("d1 transaction sent");
-        dag2.send_transaction(data[1].clone()).unwrap();
-        println!("d2 transaction sent");
-        dag3.send_transaction(data[2].clone()).unwrap();
-        println!("d3 transaction sent");
-        dag4.send_transaction(data[3].clone()).unwrap();
-        println!("d4 transaction sent");
-        dag5.send_transaction(data[4].clone()).unwrap();
-        println!("d5 transaction sent");
-
-        let mut res1: [Data; 5] = [0.into(); 5];
+        let mut res1: [Data; N] = [0.into(); N];
 
         block_on(async {
             res1 = [
@@ -974,17 +913,10 @@ mod tests {
             };
         });
 
-        //println!("Result: {:?}", res1);
-        println!(
-            "Result: {}, {}, {}, {}, {}",
-            res1[0], res1[1], res1[2], res1[3], res1[4]
-        );
+        println!("Result: {:?}", res1);
 
         println!("Shutting down DAGs");
-        dag1.shutdown().unwrap();
-        dag2.shutdown().unwrap();
-        dag3.shutdown().unwrap();
-        dag4.shutdown().unwrap();
-        dag5.shutdown().unwrap();
+
+        dags.iter().for_each(|mut dag| { dag.shutdown().unwrap(); });
     }
 }
