@@ -29,7 +29,7 @@ where
     Sig: Signature<Hash = EventHash, PublicKey = PK>,
 {
     // Create new stoirage for DAG Consensus
-    fn new(path: String) -> Result<Self>
+    fn new(path: &std::path::Path) -> Result<Self>
     where
         Self: std::marker::Sized;
 
