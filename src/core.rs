@@ -15,7 +15,6 @@ use libcommon_rs::data::DataType;
 use libcommon_rs::peer::Peer;
 use libcommon_rs::peer::PeerId;
 use libcommon_rs::peer::PeerList;
-use libconsensus::errors::Error::AtMaxVecCapacity;
 use libconsensus::errors::Result as BaseResult;
 use libhash_sha3::Hash as EventHash;
 use libsignature::PublicKey;
