@@ -696,13 +696,13 @@ mod tests {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     use futures::executor::block_on;
-    use serde::{Deserialize, Serialize};
-
+    use futures::StreamExt;
     use libcommon_rs::peer::Peer;
     use libcommon_rs::peer::PeerList;
     use libhash_sha3::Hash as EventHash;
     use libsignature::Signature as LibSignature;
     use libsignature_ed25519_dalek::{PublicKey, SecretKey, Signature};
+    use serde::{Deserialize, Serialize};
 
     use crate::conf::DAGconfig;
     use crate::libconsensus::Consensus;
@@ -744,17 +744,17 @@ mod tests {
         let mut peer_list = DAGPeerList::<Id, PublicKey>::default();
 
         const N: usize = 5;
-        let dags: Vec<DAG<Id, Data, SecretKey, PublicKey, Signature<EventHash>>> = (0..N)
+        let mut dags: Vec<DAG<Id, Data, SecretKey, PublicKey, Signature<EventHash>>> = (0..N)
             .map(|i| {
                 let kp = Signature::<EventHash>::generate_key_pair().unwrap();
-                let net_addr = &*format!("127.0.0.1:{}", 9001 + i);
+                let net_addr =
+                    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), (9001 + i) as u16);
+                println!("Set: {}", net_addr.to_string());
                 let mut peer = DAGPeer::<Id, PublicKey>::new(kp.0.clone(), net_addr.to_string());
                 peer.set_public_key(kp.0.clone());
                 peer_list.add(peer).unwrap();
 
-                let mut socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
-
-                let mut socket: SocketAddr = net_addr.parse().unwrap();
+                let mut socket: SocketAddr = net_addr.clone();
                 socket.set_port(if i <= N {
                     socket.port() + 1
                 } else {
@@ -777,149 +777,49 @@ mod tests {
             })
             .collect();
 
-        let data: Vec<Data> = vec![0; N].iter().map(|i| Data { byte: i + 1 }).collect();
+        let data: Vec<Data> = vec![0; N]
+            .iter()
+            .map(|i| Data {
+                byte: (i + 1) as i8,
+            })
+            .collect();
 
-        for (i, mut dag) in dags.iter().enumerate() {
-            dag.send_transaction(data[i].clone()).unwrap();
+        for i in 0..N {
+            dags[i].send_transaction(data[i].clone()).unwrap();
             println!("d{} transaction sent", data[i]);
         }
 
-        let mut res1: [Data; N] = [0.into(); N];
+        let mut res1: Vec<Data> = vec![Data { byte: 0 }; N];
 
         block_on(async {
-            res1 = [
-                match dag1.next().await {
-                    Some(d) => {
-                        println!("DAG1: data[0] OK");
-                        d
+            // res1 = res1.iter().map(|data| {
+            for i in 0..N {
+                if i == 0 {
+                    match dags[0].next().await {
+                        Some(d) => {
+                            println!("DAG1: data[{}] OK", i);
+                            res1[i] = d;
+                        }
+                        None => panic!("unexpected None"),
                     }
-                    None => panic!("unexpected None"),
-                },
-                match dag1.next().await {
-                    Some(d) => {
-                        println!("DAG1: data[1] OK");
-                        d
+                } else {
+                    for i in 1..N {
+                        // check DAG2
+                        match dags[i].next().await {
+                            Some(d) => assert_eq!(d, res1[0]),
+                            None => panic!("unexpected None in dags[{}]", i),
+                        };
                     }
-                    None => panic!("unexpected None"),
-                },
-                match dag1.next().await {
-                    Some(d) => {
-                        println!("DAG1: data[2] OK");
-                        d
-                    }
-                    None => panic!("unexpected None"),
-                },
-                match dag1.next().await {
-                    Some(d) => {
-                        println!("DAG1: data[3] OK");
-                        d
-                    }
-                    None => panic!("unexpected None"),
-                },
-                match dag1.next().await {
-                    Some(d) => {
-                        println!("DAG1: data[4] OK");
-                        d
-                    }
-                    None => panic!("unexpected None"),
-                },
-            ];
-
-            // check DAG2
-            match dag2.next().await {
-                Some(d) => assert_eq!(d, res1[0]),
-                None => panic!("unexpected None"),
-            };
-            match dag2.next().await {
-                Some(d) => assert_eq!(d, res1[1]),
-                None => panic!("unexpected None"),
-            };
-            match dag2.next().await {
-                Some(d) => assert_eq!(d, res1[2]),
-                None => panic!("unexpected None"),
-            };
-            match dag2.next().await {
-                Some(d) => assert_eq!(d, res1[3]),
-                None => panic!("unexpected None"),
-            };
-            match dag2.next().await {
-                Some(d) => assert_eq!(d, res1[4]),
-                None => panic!("unexpected None"),
-            };
-
-            // check DAG3
-            match dag3.next().await {
-                Some(d) => assert_eq!(d, res1[0]),
-                None => panic!("unexpected None"),
-            };
-            match dag3.next().await {
-                Some(d) => assert_eq!(d, res1[1]),
-                None => panic!("unexpected None"),
-            };
-            match dag3.next().await {
-                Some(d) => assert_eq!(d, res1[2]),
-                None => panic!("unexpected None"),
-            };
-            match dag3.next().await {
-                Some(d) => assert_eq!(d, res1[3]),
-                None => panic!("unexpected None"),
-            };
-            match dag3.next().await {
-                Some(d) => assert_eq!(d, res1[4]),
-                None => panic!("unexpected None"),
-            };
-
-            // check DAG4
-            match dag4.next().await {
-                Some(d) => assert_eq!(d, res1[0]),
-                None => panic!("unexpected None"),
-            };
-            match dag4.next().await {
-                Some(d) => assert_eq!(d, res1[1]),
-                None => panic!("unexpected None"),
-            };
-            match dag4.next().await {
-                Some(d) => assert_eq!(d, res1[2]),
-                None => panic!("unexpected None"),
-            };
-            match dag4.next().await {
-                Some(d) => assert_eq!(d, res1[3]),
-                None => panic!("unexpected None"),
-            };
-            match dag4.next().await {
-                Some(d) => assert_eq!(d, res1[4]),
-                None => panic!("unexpected None"),
-            };
-
-            // check DAG5
-            match dag5.next().await {
-                Some(d) => assert_eq!(d, res1[0]),
-                None => panic!("unexpected None"),
-            };
-            match dag5.next().await {
-                Some(d) => assert_eq!(d, res1[1]),
-                None => panic!("unexpected None"),
-            };
-            match dag5.next().await {
-                Some(d) => assert_eq!(d, res1[2]),
-                None => panic!("unexpected None"),
-            };
-            match dag5.next().await {
-                Some(d) => assert_eq!(d, res1[3]),
-                None => panic!("unexpected None"),
-            };
-            match dag5.next().await {
-                Some(d) => assert_eq!(d, res1[4]),
-                None => panic!("unexpected None"),
-            };
+                }
+            }
         });
 
         println!("Result: {:?}", res1);
 
         println!("Shutting down DAGs");
 
-        dags.iter().for_each(|mut dag| {
-            dag.shutdown().unwrap();
-        });
+        for i in 0..N {
+            dags[i].shutdown().unwrap();
+        }
     }
 }
