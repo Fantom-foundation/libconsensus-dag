@@ -747,24 +747,25 @@ mod tests {
         let mut dags: Vec<DAG<Id, Data, SecretKey, PublicKey, Signature<EventHash>>> = (0..N)
             .map(|i| {
                 let kp = Signature::<EventHash>::generate_key_pair().unwrap();
-                let net_addr =
+                let request_addr =
                     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), (9001 + i) as u16);
-                println!("Set: {}", net_addr.to_string());
-                let mut peer = DAGPeer::<Id, PublicKey>::new(kp.0.clone(), net_addr.to_string());
+                let mut peer =
+                    DAGPeer::<Id, PublicKey>::new(kp.0.clone(), request_addr.to_string());
                 peer.set_public_key(kp.0.clone());
                 peer_list.add(peer).unwrap();
 
-                let mut socket: SocketAddr = net_addr.clone();
-                socket.set_port(if i <= N {
-                    socket.port() + 1
-                } else {
-                    socket.port() - 1
-                });
-                let next_net_addr = socket.to_string();
+                let mut reply_addr: SocketAddr = request_addr.clone();
+                reply_addr.set_port(reply_addr.port() + N as u16);
+
+                println!(
+                    "`consensus_config.request_addr`: {}\n`consensus_config.reply_addr`: {}",
+                    request_addr.to_string(),
+                    reply_addr.to_string()
+                );
 
                 let mut consensus_config = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
-                consensus_config.request_addr = net_addr.to_string();
-                consensus_config.reply_addr = next_net_addr;
+                consensus_config.request_addr = request_addr.to_string();
+                consensus_config.reply_addr = reply_addr.to_string();
                 consensus_config.transport_type = libtransport::TransportType::TCP;
                 consensus_config.store_type = crate::store::StoreType::Sled;
                 consensus_config.creator = kp.0.clone();
