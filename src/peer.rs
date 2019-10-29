@@ -303,7 +303,7 @@ where
     }
     pub fn next_peer(&mut self) -> DAGPeer<P, PK> {
         // we assume the very first peer in the vector is one
-        // cotrresponding to the current node, so the value of `current`
+        // corresponding to the current node, so the value of `current`
         // is always 0 and omitted here.
         //let next = 1 + self.r % (self.n - 1);
         let next = (self.current + self.r) % self.n;
