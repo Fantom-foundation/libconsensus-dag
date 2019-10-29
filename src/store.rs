@@ -28,7 +28,7 @@ where
     PK: PublicKey,
     Sig: Signature<Hash = EventHash, PublicKey = PK>,
 {
-    // Create new stoirage for DAG Consensus
+    // Create new storage for DAG Consensus
     fn new(path: &std::path::Path) -> Result<Self>
     where
         Self: std::marker::Sized;
@@ -42,7 +42,7 @@ where
     // Read Event with Creator and Height
     fn get_event_of_creator(&self, creator: P, height: Height) -> Result<Event<Data, P, PK, Sig>>;
 
-    // Writes FlagTable into storage for specifid EventHash
+    // Writes FlagTable into storage for specified EventHash
     fn set_flag_table(&mut self, ex: &EventHash, ft: &FlagTable) -> Result<()>;
 
     // Read FlagTable with EventHash
