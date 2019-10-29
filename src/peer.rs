@@ -30,7 +30,8 @@ impl Display for Gossip {
 }
 
 pub(crate) type GossipList<P> = HashMap<P, Gossip>;
-pub(crate) type SuspectList<P> = HashMap<P, LamportTime>;
+// reserved for DAG1
+//pub(crate) type SuspectList<P> = HashMap<P, LamportTime>;
 
 // Peer attributes
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -127,11 +128,12 @@ where
     pub(crate) fn set_public_key(&mut self, key: PK) {
         self.pub_key = key;
     }
-    pub(crate) fn update_lamport_time(&mut self, time: LamportTime) {
-        if self.lamport_time < time {
-            self.lamport_time = time;
-        }
-    }
+    // reserved for future use
+    //    pub(crate) fn update_lamport_time(&mut self, time: LamportTime) {
+    //        if self.lamport_time < time {
+    //            self.lamport_time = time;
+    //        }
+    //    }
     pub(crate) fn get_lamport_time(&self) -> LamportTime {
         self.lamport_time
     }

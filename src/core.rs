@@ -149,17 +149,18 @@ where
         swap(&mut self.tx_pool, &mut new_trx);
         new_trx
     }
-    pub(crate) fn add_internal_transaction(
-        &mut self,
-        tx: InternalTransaction<P, PK>,
-    ) -> Result<()> {
-        // Vec::push() panics when number of elements overflows `usize`
-        if self.internal_tx_pool.len() == std::usize::MAX {
-            return Err(AtMaxVecCapacity.into());
-        }
-        self.internal_tx_pool.push(tx);
-        Ok(())
-    }
+    // FIXME: reserved for DAG1
+    //    pub(crate) fn add_internal_transaction(
+    //        &mut self,
+    //        tx: InternalTransaction<P, PK>,
+    //    ) -> Result<()> {
+    //        // Vec::push() panics when number of elements overflows `usize`
+    //        if self.internal_tx_pool.len() == std::usize::MAX {
+    //            return Err(AtMaxVecCapacity.into());
+    //        }
+    //        self.internal_tx_pool.push(tx);
+    //        Ok(())
+    //    }
     pub(crate) fn next_internal_transactions(&mut self) -> Vec<InternalTransaction<P, PK>> {
         let mut len = self.internal_tx_pool.len();
         if len > Self::TRANSACTIONS_LIMIT {

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 // FlagTable is a map from EventHash into Frame number
 pub(crate) type FlagTable = HashMap<EventHash, FrameNumber>;
 // CreatorFlagTable is a map from PeerId into Frame number (Frame)
-pub(crate) type CreatorFlagTable<P: PeerId> = HashMap<P, FrameNumber>;
+pub(crate) type CreatorFlagTable<P> = HashMap<P, FrameNumber>;
 
 pub(crate) fn flag_table_fmt(ft: &FlagTable) -> String {
     let mut formatted = String::new();

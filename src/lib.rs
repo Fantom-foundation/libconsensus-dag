@@ -13,14 +13,17 @@ extern crate libconsensus;
 extern crate syslog;
 pub use crate::conf::DAGconfig;
 use crate::core::DAGcore;
-use crate::errors::{Error, Result};
+use crate::errors::Error;
+// reserved for DAG1
+//use crate::errors::{Result};
 use crate::event::Event;
 pub use crate::peer::DAGPeer;
 pub use crate::peer::DAGPeerList;
 use crate::peer::FrameNumber;
 use crate::peer::GossipList;
 use crate::sync::{SyncReply, SyncReq};
-use crate::transactions::InternalTransaction;
+// reserved for DAG1
+//use crate::transactions::InternalTransaction;
 use futures::executor::block_on;
 use futures::stream::Stream;
 use futures::stream::StreamExt;
@@ -549,11 +552,12 @@ where
     PK: PublicKey,
     Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK>,
 {
-    // send internal transaction
-    fn send_internal_transaction(&mut self, tx: InternalTransaction<P, PK>) -> Result<()> {
-        let mut core = self.core.write().unwrap();
-        core.add_internal_transaction(tx)
-    }
+    // FIXME: reserved for DAG1
+    /// Sends internal transaction
+    //    fn send_internal_transaction(&mut self, tx: InternalTransaction<P, PK>) -> Result<()> {
+    //        let mut core = self.core.write().unwrap();
+    //        core.add_internal_transaction(tx)
+    //    }
     pub(crate) fn set_quit_tx(&mut self, tx: Sender<()>) {
         self.quit_txs.push(tx);
     }
