@@ -54,7 +54,7 @@ where
     PK: PublicKey,
     Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK>,
 {
-    /// Defines maximum number of transactions in a single event
+    // Defines maximum number of transactions in a single event
     const TRANSACTIONS_LIMIT: usize = 16000;
 
     pub(crate) fn new(conf: DAGconfig<P, Data, SK, PK>) -> DAGcore<P, Data, SK, PK, Sig> {
@@ -177,7 +177,7 @@ where
     }
     pub(crate) fn check_event(&self, event: &Event<Data, P, PK, Sig>) -> Result<bool> {
         // FIXME: implement event verification:
-        // - self-parant must be the last known event of the creator with height one minus height of the event
+        // - self-parеnt must be the last known event of the creator with height one minus height of the event
         // - all signatures must be verified positively
         for (signatory, signature) in event.signatures.iter() {
             let peer = { self.conf.read().unwrap().peers.find_peer(signatory)? };
@@ -282,7 +282,7 @@ where
                 frame_upto
             );
             for frame in first_not_finalised_frame..(frame_upto + 1) {
-                //self.finalise_frame(frame)
+                // self.finalise_frame(frame)
                 {
                     let mut store = self.store.write().unwrap();
                     let mut frame_itself = store.get_frame(frame)?;
