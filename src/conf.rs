@@ -9,6 +9,7 @@ use libsignature::PublicKey;
 use libsignature::SecretKey;
 use libtransport::TransportType;
 use std::marker::PhantomData;
+use std::path::PathBuf;
 
 pub struct DAGconfig<P, Data, SK, PK>
 where
@@ -20,6 +21,7 @@ where
     pub reply_addr: String,
     pub transport_type: TransportType,
     pub store_type: StoreType,
+    pub store_dir: PathBuf,
     // heartbeat duration in milliseconds
     pub heartbeat: u64,
     pub(crate) proc_a_delay: u64,
@@ -83,6 +85,7 @@ where
             proc_a_delay: 1000,
             transport_type: TransportType::Unknown,
             store_type: StoreType::Unknown,
+            store_dir: PathBuf::from("./sled_store"),
             waker: None,
             peers: DAGPeerList::new(),
             creator: Default::default(),
