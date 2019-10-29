@@ -133,10 +133,6 @@ where
         self.lamport_time
     }
     pub(crate) fn add_transaction(&mut self, data: Data) -> BaseResult<()> {
-        // Vec::push() panics when number of elements overflows `usize`
-        if self.tx_pool.len() == std::usize::MAX {
-            return Err(AtMaxVecCapacity.into());
-        }
         self.tx_pool.push(data);
         Ok(())
     }
@@ -154,10 +150,6 @@ where
     //        &mut self,
     //        tx: InternalTransaction<P, PK>,
     //    ) -> Result<()> {
-    //        // Vec::push() panics when number of elements overflows `usize`
-    //        if self.internal_tx_pool.len() == std::usize::MAX {
-    //            return Err(AtMaxVecCapacity.into());
-    //        }
     //        self.internal_tx_pool.push(tx);
     //        Ok(())
     //    }

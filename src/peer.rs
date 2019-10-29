@@ -254,9 +254,6 @@ where
     }
 
     fn add(&mut self, p: DAGPeer<Pid, PK>) -> std::result::Result<(), Error> {
-        if self.peers.len() == std::usize::MAX {
-            return Err(Error::Base(AtMaxVecCapacity));
-        }
         self.peers.push(p);
         self.n = self.peers.len();
         self.r = self.n >> 1;
