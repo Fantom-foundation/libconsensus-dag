@@ -62,37 +62,43 @@ where
     // This procedure takes a flag table as input
     // and produces a map which stores creator's hashes of visible roots;
     // for each root it stores minimal frame number.
-    fn derive_creator_flag_table(&self, ft: &FlagTable) -> CreatorFlagTable<P> {
+    fn derive_creator_flag_table(
+        &self,
+        ft: &FlagTable,
+        min_frame: FrameNumber,
+    ) -> CreatorFlagTable<P> {
         let mut result = CreatorFlagTable::<P>::new();
         for (key, value) in ft.iter() {
-            match self.get_event(key) {
-                Err(e) => match e.downcast::<Error>() {
-                    Ok(err) => {
-                        if err == Error::NoneError {
-                            warn!("Event {:?} not found", key)
-                        } else {
-                            error!(
-                                "Error {:?} encountered while retrieving event {:?}",
-                                err, key
-                            )
+            if *value >= min_frame {
+                match self.get_event(key) {
+                    Err(e) => match e.downcast::<Error>() {
+                        Ok(err) => {
+                            if err == Error::NoneError {
+                                warn!("Event {:?} not found", key)
+                            } else {
+                                error!(
+                                    "Error {:?} encountered while retrieving event {:?}",
+                                    err, key
+                                )
+                            }
                         }
-                    }
-                    Err(erx) => error!(
-                        "Error {:?} encountered while retrieving event {:?}",
-                        erx, key
-                    ),
-                },
-                Ok(e) => match result.get(&e.creator) {
-                    Some(frame) => {
-                        if *frame < *value {
+                        Err(erx) => error!(
+                            "Error {:?} encountered while retrieving event {:?}",
+                            erx, key
+                        ),
+                    },
+                    Ok(e) => match result.get(&e.creator) {
+                        Some(frame) => {
+                            if *frame < *value {
+                                result.insert(e.creator, *value);
+                            }
+                        }
+                        _ => {
                             result.insert(e.creator, *value);
                         }
-                    }
-                    _ => {
-                        result.insert(e.creator, *value);
-                    }
-                },
-            };
+                    },
+                };
+            }
         }
         result
     }

@@ -88,11 +88,11 @@ fn listener<P, Data, SK, PK, Sig>(
 
     let me = { core.read().unwrap().me_a() };
 
-    debug!("{}: listener started", me.clone());
+    debug!("l {}: listener started", me.clone());
 
     loop {
         // check if quit channel got message
-        //debug!("{}: listener loop start", me.clone());
+        //debug!("l {}: listener loop start", me.clone());
         match quit_rx.try_recv() {
             Ok(_) | Err(TryRecvError::Disconnected) => {
                 core.write().unwrap().set_shutdown(true);
@@ -105,7 +105,11 @@ fn listener<P, Data, SK, PK, Sig>(
         // NB: it may not be from the very same peer we have sent Sync Request above.
         block_on(async {
             if let Some(sync_reply) = sync_reply_receiver.next().await {
-                debug!("{} Sync Reply from {}", me.clone(), sync_reply.from.clone());
+                debug!(
+                    "l {} Sync Reply from {}",
+                    me.clone(),
+                    sync_reply.from.clone()
+                );
                 // update Lamport timestamp of the node
                 {
                     core.write()
@@ -118,16 +122,23 @@ fn listener<P, Data, SK, PK, Sig>(
                         let event: Event<Data, P, PK, Sig> = ev.into();
                         // check if event is valid
                         if !{ core.read().unwrap().check_event(&event).unwrap() } {
-                            error!("{}: Event {} is not valid", me.clone(), event);
+                            error!("l {}: Event {} is not valid", me.clone(), event);
                             continue;
                         }
                         let lamport_time = event.get_lamport_time();
                         let height = event.get_height();
                         let creator = event.get_creator();
+                        debug!("l {}: insert event: {}", me.clone(), event.clone());
                         // insert event into node DB
                         {
                             core.write().unwrap().insert_event(event).unwrap();
                         }
+                        debug!(
+                            "l {}: updating lamport time {} and height {}",
+                            me.clone(),
+                            lamport_time.clone(),
+                            height.clone()
+                        );
                         // update lamport time and height of the event creator's peer
                         config
                             .write()
@@ -138,6 +149,11 @@ fn listener<P, Data, SK, PK, Sig>(
                             .update_lamport_time_and_height(lamport_time, height);
                     }
                 }
+                debug!(
+                    "l {} Sync Reply from {} done",
+                    me.clone(),
+                    sync_reply.from.clone()
+                );
             }
         });
         // allow to pool again if waker is set
@@ -187,26 +203,28 @@ where
     loop {
         debug!("{}: proc_a loop", me.clone());
         // check if shutdown() has been called
-        let mut cfg = config.write().unwrap();
         debug!("{} checking quit condition", me.clone());
-        if core.write().unwrap().check_quit() {
+        if { core.read().unwrap().check_quit() } {
             debug!("{}: terminating proc_a", me.clone());
             // terminating
             // FIXME: need to be implemented
             break;
         }
+        debug!("{} locking cfg", me.clone());
+        let mut cfg = config.write().unwrap();
         // choose the next peer and send Sync Request to it.
+        debug!("{} getting next peer", me.clone());
         let peer = cfg.peers.next_peer();
         debug!("{} got next peer: {}", me.clone(), peer.clone());
         let gossip_list: GossipList<P> = cfg.peers.get_gossip_list();
+        drop(cfg);
         debug!("{} got gossip list", me.clone());
         let request = SyncReq {
-            from: cfg.get_creator(),
+            from: creator.clone(),
             to: peer.id.clone(),
             gossip_list,
             lamport_time: { core.read().unwrap().get_lamport_time() },
         };
-        drop(cfg);
         debug!(
             "{}: sending SyncReq to {} ==> {}",
             me.clone(),
@@ -354,12 +372,13 @@ fn procedure_b<P, D, SK, PK, Sig>(
             debug!("{}: lamport time update: {}", me.clone(), {
                 core.read().unwrap().get_lamport_time()
             });
-            match {
+            let events_for_gossip = {
                 store
                     .read()
                     .unwrap()
                     .get_events_for_gossip(&sync_req.gossip_list)
-            } {
+            };
+            match events_for_gossip {
                 Err(e) => error!("Procedure B: get_events_for_gossip() error: {:?}", e),
                 Ok(events) => {
                     debug!("{}: got events for gossip", me.clone());
@@ -584,24 +603,31 @@ where
     type Item = Data;
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let myself = Pin::get_mut(self);
-        let mut core = myself.core.write().unwrap();
-        let me = core.me_a();
-        if core.check_quit() {
-            debug!("o {}: terminating stream", me);
-            return Poll::Ready(None);
-        }
+        let me = {
+            let core = myself.core.read().unwrap();
+            let me = core.me_a();
+            if core.check_quit() {
+                debug!("o {}: terminating stream", me);
+                return Poll::Ready(None);
+            }
+            me
+        };
         let mut data: Option<Self::Item> = None;
         debug!("o {}: check last finalised frame", me.clone());
-        let last_finalised_frame: FrameNumber = match core.last_finalised_frame {
-            None => {
-                core.conf.write().unwrap().waker = Some(cx.waker().clone());
-                debug!("o {}: poll pending", me);
-                return Poll::Pending;
+        let last_finalised_frame: FrameNumber = {
+            let core = myself.core.read().unwrap();
+            match core.last_finalised_frame {
+                None => {
+                    core.conf.write().unwrap().waker = Some(cx.waker().clone());
+                    debug!("o {}: poll pending", me);
+                    return Poll::Pending;
+                }
+                Some(x) => x,
             }
-            Some(x) => x,
         };
 
         loop {
+            let mut core = myself.core.write().unwrap();
             debug!("o {}: check current frame", me.clone());
             let mut current_frame: FrameNumber = match core.current_frame {
                 None => 0,
@@ -668,8 +694,8 @@ where
             }
         }
 
-        core.conf.write().unwrap().waker = Some(cx.waker().clone());
-        debug!("o {}: delivering data", me);
+        myself.core.read().unwrap().conf.write().unwrap().waker = Some(cx.waker().clone());
+        debug!("o {}: delivering data: {:#?}", me, data.clone());
         Poll::Ready(data)
     }
 }

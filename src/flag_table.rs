@@ -83,7 +83,7 @@ pub(crate) fn open_merge_flag_table(
     result
 }
 
-pub(crate) fn min_frame(ft: &FlagTable) -> FrameNumber {
+pub(crate) fn min_frame<P>(ft: &CreatorFlagTable<P>) -> FrameNumber {
     let mut res: Option<FrameNumber> = None;
     for (_, frame) in ft.iter() {
         match res {
