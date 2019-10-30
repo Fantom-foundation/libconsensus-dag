@@ -20,6 +20,7 @@ use libhash_sha3::Hash as EventHash;
 use libsignature::PublicKey;
 use libsignature::SecretKey;
 use libsignature::Signature;
+use std::cmp::Ordering;
 use std::sync::Arc;
 use std::sync::RwLock;
 
@@ -195,31 +196,36 @@ where
         debug!("{}: * event and ft read", self.me_a());
         let root: bool; // = false;
         let frame: FrameNumber /* FrameNumber::default() */ =
-            if self_parent_event.frame_number == other_parent_event.frame_number {
-                let root_flag_table = strict_merge_flag_table(
-                    &self_parent_ft,
-                    &other_parent_ft,
-                    self_parent_event.frame_number,
-                );
-                let creator_root_flag_table = {
-                    let store = self.store.read().unwrap();
-                    store.derive_creator_flag_table(&root_flag_table, self_parent_event.frame_number)
-                };
-                let root_majority = { self.conf.read().unwrap().peers.root_majority() };
-                if creator_root_flag_table.len() >= root_majority {
-                    root = true;
-                    self_parent_event.frame_number + 1
-                } else {
+            match self_parent_event.frame_number.cmp(&other_parent_event.frame_number) {
+                Ordering::Equal => {
+                    let root_flag_table = strict_merge_flag_table(
+                        &self_parent_ft,
+                        &other_parent_ft,
+                        self_parent_event.frame_number,
+                    );
+                    let creator_root_flag_table = {
+                        let store = self.store.read().unwrap();
+                        store.derive_creator_flag_table(&root_flag_table, self_parent_event.frame_number)
+                    };
+                    let root_majority = { self.conf.read().unwrap().peers.root_majority() };
+                    if creator_root_flag_table.len() >= root_majority {
+                        root = true;
+                        self_parent_event.frame_number + 1
+                    } else {
+                        root = false;
+                        self_parent_event.frame_number
+                    }
+                },
+                Ordering::Greater => {
                     root = false;
                     self_parent_event.frame_number
-                }
-            } else if self_parent_event.frame_number > other_parent_event.frame_number {
-                root = false;
-                self_parent_event.frame_number
-            } else {
-                root = true;
-                other_parent_event.frame_number
+                },
+                Ordering::Less => {
+                    root = true;
+                    other_parent_event.frame_number
+                },
             };
+
         debug!("{}: * got frame number", self.me_a());
         event.frame_number = frame;
         let first_not_finalised_frame = match self.last_finalised_frame {
@@ -244,7 +250,7 @@ where
             let signature = Sig::sign(event_hash, cfg.get_public_key(), cfg.get_secret_key())?;
             event
                 .signatures
-                .insert(cfg.peers.get_creator_id(), signature.clone());
+                .insert(cfg.peers.get_creator_id(), signature);
         }
         debug!("{}: * insert event: {}", self.me_a(), event.clone());
 

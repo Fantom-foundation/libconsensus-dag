@@ -283,16 +283,7 @@ where
         &mut self.peers
     }
     fn sort_peers(&mut self) {
-        self.peers_mut().sort_by(|a, b| {
-            use std::cmp::Ordering;
-            if a.id < b.id {
-                Ordering::Less
-            } else if a.id > b.id {
-                Ordering::Greater
-            } else {
-                Ordering::Equal
-            }
-        });
+        self.peers_mut().sort_by(|a, b| a.id.cmp(&b.id));
         self.current = match self.peers.iter().position(|x| x.id == self.creator) {
             Some(p) => p,
             None => 0, //panic!("creator not found in the peers!"),

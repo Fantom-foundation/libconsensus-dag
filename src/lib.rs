@@ -187,10 +187,7 @@ where
         (cfg.transport_type.clone(), cfg.reply_addr.clone())
     };
     let me = { core.read().unwrap().me_a() };
-    debug!(
-        "procedure_a, reply_bind_addr: {}",
-        reply_bind_address.clone()
-    );
+    debug!("procedure_a, reply_bind_addr: {}", reply_bind_address);
     // setup TransportSender for Sync Request.
     let mut sync_req_sender = {
         match transport_type {
@@ -207,7 +204,7 @@ where
         debug!("{} checking quit condition", me.clone());
         let quit = { core.read().unwrap().check_quit() };
         if quit {
-            debug!("{}: terminating proc_a", me.clone());
+            debug!("{}: terminating proc_a", me);
             // terminating
             // FIXME: need to be implemented
             break;
@@ -336,10 +333,7 @@ fn procedure_b<P, D, SK, PK, Sig>(
         (cfg.transport_type.clone(), cfg.request_addr.clone())
     };
     let me = { core.read().unwrap().me_b() };
-    debug!(
-        "procedure_b, request_bind_addr: {}",
-        request_bind_address.clone()
-    );
+    debug!("procedure_b, request_bind_addr: {}", request_bind_address);
     let mut sync_reply_sender = {
         match transport_type {
             libtransport::TransportType::TCP => {
@@ -556,7 +550,7 @@ where
             debug!("d {}: calling waker", me.clone());
             waker.wake();
         }
-        debug!("d {}: shutting down procedure B", me.clone());
+        debug!("d {}: shutting down procedure B", me);
         if let Some(proc_b_handle) = self.proc_b_handle.take() {
             proc_b_handle
                 .join()
