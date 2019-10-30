@@ -838,24 +838,23 @@ mod tests {
 
         block_on(async {
             // res1 = res1.iter().map(|data| {
+
             for i in 0..N {
-                if i == 0 {
-                    match dags[0].next().await {
-                        Some(d) => {
-                            println!("DAG1: data[{}] OK", i);
-                            res1[i] = d;
-                        }
-                        None => panic!("unexpected None"),
+                match dags[0].next().await {
+                    Some(d) => {
+                        println!("DAG1: data[{}] OK", i);
+                        res1[i] = d;
                     }
-                } else {
-                    for i in 1..N {
-                        // check DAG2
-                        match dags[i].next().await {
-                            Some(d) => assert_eq!(d, res1[0]),
-                            None => panic!("unexpected None in dags[{}]", i),
-                        };
-                    }
+                    None => panic!("unexpected None"),
                 }
+            }
+
+            for i in 1..N {
+                // check DAG2
+                match dags[i].next().await {
+                    Some(d) => assert_eq!(d, res1[0]),
+                    None => panic!("unexpected None in dags[{}]", i),
+                };
             }
         });
 
