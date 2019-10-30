@@ -711,23 +711,26 @@ mod transactions;
 
 #[cfg(test)]
 mod tests {
-    use crate::conf::DAGconfig;
-    use crate::libconsensus::Consensus;
-    use crate::libconsensus::ConsensusConfiguration;
-    pub use crate::peer::DAGPeer;
-    pub use crate::peer::DAGPeerList;
-    use crate::DAG;
-    use core::fmt::Display;
-    use core::fmt::Formatter;
+    use core::fmt::{Display, Formatter};
+
     use futures::executor::block_on;
-    use futures::stream::StreamExt;
+    use futures::StreamExt;
     use libcommon_rs::peer::Peer;
     use libcommon_rs::peer::PeerList;
     use libhash_sha3::Hash as EventHash;
     use libsignature::Signature as LibSignature;
     use libsignature_ed25519_dalek::{PublicKey, SecretKey, Signature};
     use serde::{Deserialize, Serialize};
+
+    use crate::conf::DAGconfig;
+    use crate::libconsensus::Consensus;
+    use crate::libconsensus::ConsensusConfiguration;
+    pub use crate::peer::DAGPeer;
+    pub use crate::peer::DAGPeerList;
+    use crate::DAG;
+
     type Id = PublicKey;
+
     #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Serialize, Deserialize, Hash, Copy)]
     struct Data {
         byte: i8,
@@ -741,14 +744,14 @@ mod tests {
         }
     }
 
-    impl From<i8> for Data {
-        fn from(i: i8) -> Data {
-            Data { byte: i }
+    impl From<usize> for Data {
+        fn from(i: usize) -> Data {
+            Data { byte: i as i8 }
         }
     }
 
     #[test]
-    fn test_initialise_network() {
+    fn test_vectorised_network() {
         env_logger::init();
         //        syslog::init(
         //            syslog::Facility::LOG_USER,
@@ -756,257 +759,81 @@ mod tests {
         //            Some("test"),
         //        )
         //        .unwrap();
-
-        let kp1 = Signature::<EventHash>::generate_key_pair().unwrap();
-        let kp2 = Signature::<EventHash>::generate_key_pair().unwrap();
-        let kp3 = Signature::<EventHash>::generate_key_pair().unwrap();
-        let kp4 = Signature::<EventHash>::generate_key_pair().unwrap();
-        let kp5 = Signature::<EventHash>::generate_key_pair().unwrap();
-
+        const N: usize = 5;
+        const BASE_PORT: usize = 10001;
+        let mut kp: Vec<(PublicKey, SecretKey)> = Vec::with_capacity(N);
         let mut peer_list = DAGPeerList::<Id, PublicKey>::default();
-        let mut peer1 = DAGPeer::<Id, PublicKey>::new(kp1.0.clone(), "127.0.0.1:9001".to_string());
-        peer1.set_public_key(kp1.0.clone());
-        let mut peer2 = DAGPeer::<Id, PublicKey>::new(kp2.0.clone(), "127.0.0.1:9003".to_string());
-        peer2.set_public_key(kp2.0.clone());
-        let mut peer3 = DAGPeer::<Id, PublicKey>::new(kp3.0.clone(), "127.0.0.1:9005".to_string());
-        peer3.set_public_key(kp3.0.clone());
-        let mut peer4 = DAGPeer::<Id, PublicKey>::new(kp4.0.clone(), "127.0.0.1:9007".to_string());
-        peer4.set_public_key(kp4.0.clone());
-        let mut peer5 = DAGPeer::<Id, PublicKey>::new(kp5.0.clone(), "127.0.0.1:9009".to_string());
-        peer5.set_public_key(kp5.0.clone());
+        let mut dag: Vec<DAG<Id, Data, SecretKey, PublicKey, Signature<EventHash>>> =
+            Vec::with_capacity(N);
+        let mut data: Vec<Data> = Vec::with_capacity(N);
 
-        peer_list.add(peer1).unwrap();
-        peer_list.add(peer2).unwrap();
-        peer_list.add(peer3).unwrap();
-        peer_list.add(peer4).unwrap();
-        peer_list.add(peer5).unwrap();
+        for i in 0..N {
+            kp.push(Signature::<EventHash>::generate_key_pair().unwrap());
+            let mut peer = DAGPeer::<Id, PublicKey>::new(
+                kp[i].0.clone(),
+                format!("127.0.0.1:{}", BASE_PORT + 2 * i).to_string(),
+            );
+            peer.set_public_key(kp[i].0.clone());
+            peer_list.add(peer).unwrap();
+            data.push(i.into());
+        }
+        for i in 0..N {
+            let mut consensus_config = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
+            consensus_config.request_addr = format!("127.0.0.1:{}", BASE_PORT + 2 * i).to_string();
+            consensus_config.reply_addr =
+                format!("127.0.0.1:{}", BASE_PORT + 2 * i + 1).to_string();
+            consensus_config.transport_type = libtransport::TransportType::TCP;
+            consensus_config.store_type = crate::store::StoreType::Sled;
+            consensus_config.creator = kp[i].0.clone();
+            consensus_config.public_key = kp[i].0.clone();
+            consensus_config.secret_key = kp[i].1.clone();
+            consensus_config.peers = peer_list.clone();
+            dag.push(
+                DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config)
+                    .unwrap(),
+            );
+        }
 
-        let mut consensus_config1 = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
-        consensus_config1.request_addr = "127.0.0.1:9001".to_string();
-        consensus_config1.reply_addr = "127.0.0.1:9002".to_string();
-        consensus_config1.transport_type = libtransport::TransportType::TCP;
-        consensus_config1.store_type = crate::store::StoreType::Sled;
-        consensus_config1.creator = kp1.0.clone();
-        consensus_config1.public_key = kp1.0;
-        consensus_config1.secret_key = kp1.1;
-        consensus_config1.peers = peer_list.clone();
+        for i in 0..N {
+            dag[i].send_transaction(data[i].clone()).unwrap();
+            println!("d{} transaction sent", data[i]);
+        }
 
-        let mut consensus_config2 = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
-        consensus_config2.request_addr = "127.0.0.1:9003".to_string();
-        consensus_config2.reply_addr = "127.0.0.1:9004".to_string();
-        consensus_config2.transport_type = libtransport::TransportType::TCP;
-        consensus_config2.store_type = crate::store::StoreType::Sled;
-        consensus_config2.creator = kp2.0.clone();
-        consensus_config2.public_key = kp2.0;
-        consensus_config2.secret_key = kp2.1;
-        consensus_config2.peers = peer_list.clone();
-
-        let mut consensus_config3 = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
-        consensus_config3.request_addr = "127.0.0.1:9005".to_string();
-        consensus_config3.reply_addr = "127.0.0.1:9006".to_string();
-        consensus_config3.transport_type = libtransport::TransportType::TCP;
-        consensus_config3.store_type = crate::store::StoreType::Sled;
-        consensus_config3.creator = kp3.0.clone();
-        consensus_config3.public_key = kp3.0;
-        consensus_config3.secret_key = kp3.1;
-        consensus_config3.peers = peer_list.clone();
-
-        let mut consensus_config4 = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
-        consensus_config4.request_addr = "127.0.0.1:9007".to_string();
-        consensus_config4.reply_addr = "127.0.0.1:9008".to_string();
-        consensus_config4.transport_type = libtransport::TransportType::TCP;
-        consensus_config4.store_type = crate::store::StoreType::Sled;
-        consensus_config4.creator = kp4.0.clone();
-        consensus_config4.public_key = kp4.0;
-        consensus_config4.secret_key = kp4.1;
-        consensus_config4.peers = peer_list.clone();
-
-        let mut consensus_config5 = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
-        consensus_config5.request_addr = "127.0.0.1:9009".to_string();
-        consensus_config5.reply_addr = "127.0.0.1:9010".to_string();
-        consensus_config5.transport_type = libtransport::TransportType::TCP;
-        consensus_config5.store_type = crate::store::StoreType::Sled;
-        consensus_config5.creator = kp5.0.clone();
-        consensus_config5.public_key = kp5.0;
-        consensus_config5.secret_key = kp5.1;
-        consensus_config5.peers = peer_list.clone();
-
-        let mut dag1 =
-            DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config1)
-                .unwrap();
-        let mut dag2 =
-            DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config2)
-                .unwrap();
-        let mut dag3 =
-            DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config3)
-                .unwrap();
-        let mut dag4 =
-            DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config4)
-                .unwrap();
-        let mut dag5 =
-            DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config5)
-                .unwrap();
-
-        let data: [Data; 5] = [
-            Data { byte: 1 },
-            Data { byte: 2 },
-            Data { byte: 3 },
-            Data { byte: 4 },
-            Data { byte: 5 },
-        ];
-
-        dag1.send_transaction(data[0].clone()).unwrap();
-        println!("d1 transaction sent");
-        dag2.send_transaction(data[1].clone()).unwrap();
-        println!("d2 transaction sent");
-        dag3.send_transaction(data[2].clone()).unwrap();
-        println!("d3 transaction sent");
-        dag4.send_transaction(data[3].clone()).unwrap();
-        println!("d4 transaction sent");
-        dag5.send_transaction(data[4].clone()).unwrap();
-        println!("d5 transaction sent");
-
-        let mut res1: [Data; 5] = [0.into(); 5];
+        let mut res1: Vec<Data> = vec![Data { byte: 0 }; N];
 
         block_on(async {
-            res1 = [
-                match dag1.next().await {
-                    Some(d) => {
-                        println!("DAG1: data[0] OK");
-                        d
+            for i in 0..N {
+                match i {
+                    0 => {
+                        for i in 0..N {
+                            match dag[0].next().await {
+                                Some(d) => {
+                                    println!("DAG1: data[{}] OK", i);
+                                    res1[i] = d;
+                                }
+                                None => panic!("unexpected None"),
+                            }
+                        }
                     }
-                    None => panic!("unexpected None"),
-                },
-                match dag1.next().await {
-                    Some(d) => {
-                        println!("DAG1: data[1] OK");
-                        d
+                    x => {
+                        for i in 0..N {
+                            // check DAG2
+                            match dag[x].next().await {
+                                Some(d) => assert_eq!(d, res1[i]),
+                                None => panic!("unexpected None in dags[{}]", i),
+                            };
+                        }
                     }
-                    None => panic!("unexpected None"),
-                },
-                match dag1.next().await {
-                    Some(d) => {
-                        println!("DAG1: data[2] OK");
-                        d
-                    }
-                    None => panic!("unexpected None"),
-                },
-                match dag1.next().await {
-                    Some(d) => {
-                        println!("DAG1: data[3] OK");
-                        d
-                    }
-                    None => panic!("unexpected None"),
-                },
-                match dag1.next().await {
-                    Some(d) => {
-                        println!("DAG1: data[4] OK");
-                        d
-                    }
-                    None => panic!("unexpected None"),
-                },
-            ];
-
-            // check DAG2
-            match dag2.next().await {
-                Some(d) => assert_eq!(d, res1[0]),
-                None => panic!("unexpected None"),
-            };
-            match dag2.next().await {
-                Some(d) => assert_eq!(d, res1[1]),
-                None => panic!("unexpected None"),
-            };
-            match dag2.next().await {
-                Some(d) => assert_eq!(d, res1[2]),
-                None => panic!("unexpected None"),
-            };
-            match dag2.next().await {
-                Some(d) => assert_eq!(d, res1[3]),
-                None => panic!("unexpected None"),
-            };
-            match dag2.next().await {
-                Some(d) => assert_eq!(d, res1[4]),
-                None => panic!("unexpected None"),
-            };
-
-            // check DAG3
-            match dag3.next().await {
-                Some(d) => assert_eq!(d, res1[0]),
-                None => panic!("unexpected None"),
-            };
-            match dag3.next().await {
-                Some(d) => assert_eq!(d, res1[1]),
-                None => panic!("unexpected None"),
-            };
-            match dag3.next().await {
-                Some(d) => assert_eq!(d, res1[2]),
-                None => panic!("unexpected None"),
-            };
-            match dag3.next().await {
-                Some(d) => assert_eq!(d, res1[3]),
-                None => panic!("unexpected None"),
-            };
-            match dag3.next().await {
-                Some(d) => assert_eq!(d, res1[4]),
-                None => panic!("unexpected None"),
-            };
-
-            // check DAG4
-            match dag4.next().await {
-                Some(d) => assert_eq!(d, res1[0]),
-                None => panic!("unexpected None"),
-            };
-            match dag4.next().await {
-                Some(d) => assert_eq!(d, res1[1]),
-                None => panic!("unexpected None"),
-            };
-            match dag4.next().await {
-                Some(d) => assert_eq!(d, res1[2]),
-                None => panic!("unexpected None"),
-            };
-            match dag4.next().await {
-                Some(d) => assert_eq!(d, res1[3]),
-                None => panic!("unexpected None"),
-            };
-            match dag4.next().await {
-                Some(d) => assert_eq!(d, res1[4]),
-                None => panic!("unexpected None"),
-            };
-
-            // check DAG5
-            match dag5.next().await {
-                Some(d) => assert_eq!(d, res1[0]),
-                None => panic!("unexpected None"),
-            };
-            match dag5.next().await {
-                Some(d) => assert_eq!(d, res1[1]),
-                None => panic!("unexpected None"),
-            };
-            match dag5.next().await {
-                Some(d) => assert_eq!(d, res1[2]),
-                None => panic!("unexpected None"),
-            };
-            match dag5.next().await {
-                Some(d) => assert_eq!(d, res1[3]),
-                None => panic!("unexpected None"),
-            };
-            match dag5.next().await {
-                Some(d) => assert_eq!(d, res1[4]),
-                None => panic!("unexpected None"),
-            };
+                }
+            }
         });
 
-        //println!("Result: {:?}", res1);
-        println!(
-            "Result: {}, {}, {}, {}, {}",
-            res1[0], res1[1], res1[2], res1[3], res1[4]
-        );
+        println!("Result: {:?}", res1);
 
         println!("Shutting down DAGs");
-        dag1.shutdown().unwrap();
-        dag2.shutdown().unwrap();
-        dag3.shutdown().unwrap();
-        dag4.shutdown().unwrap();
-        dag5.shutdown().unwrap();
+
+        for i in 0..N {
+            dag[i].shutdown().unwrap();
+        }
     }
 }
