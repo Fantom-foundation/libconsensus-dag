@@ -15,7 +15,6 @@ use libcommon_rs::data::DataType;
 use libcommon_rs::peer::Peer;
 use libcommon_rs::peer::PeerId;
 use libcommon_rs::peer::PeerList;
-use libconsensus::errors::Error::AtMaxVecCapacity;
 use libconsensus::errors::Result as BaseResult;
 use libhash_sha3::Hash as EventHash;
 use libsignature::PublicKey;
@@ -54,7 +53,7 @@ where
     PK: PublicKey,
     Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK>,
 {
-    /// Defines maximum number of transactions in a single event
+    // Defines maximum number of transactions in a single event
     const TRANSACTIONS_LIMIT: usize = 16000;
 
     pub(crate) fn new(conf: DAGconfig<P, Data, SK, PK>) -> DAGcore<P, Data, SK, PK, Sig> {
@@ -133,10 +132,6 @@ where
         self.lamport_time
     }
     pub(crate) fn add_transaction(&mut self, data: Data) -> BaseResult<()> {
-        // Vec::push() panics when number of elements overflows `usize`
-        if self.tx_pool.len() == std::usize::MAX {
-            return Err(AtMaxVecCapacity.into());
-        }
         self.tx_pool.push(data);
         Ok(())
     }
@@ -154,10 +149,6 @@ where
     //        &mut self,
     //        tx: InternalTransaction<P, PK>,
     //    ) -> Result<()> {
-    //        // Vec::push() panics when number of elements overflows `usize`
-    //        if self.internal_tx_pool.len() == std::usize::MAX {
-    //            return Err(AtMaxVecCapacity.into());
-    //        }
     //        self.internal_tx_pool.push(tx);
     //        Ok(())
     //    }
@@ -177,7 +168,7 @@ where
     }
     pub(crate) fn check_event(&self, event: &Event<Data, P, PK, Sig>) -> Result<bool> {
         // FIXME: implement event verification:
-        // - self-parant must be the last known event of the creator with height one minus height of the event
+        // - self-parеnt must be the last known event of the creator with height one minus height of the event
         // - all signatures must be verified positively
         for (signatory, signature) in event.signatures.iter() {
             let peer = { self.conf.read().unwrap().peers.find_peer(signatory)? };

@@ -308,7 +308,7 @@ where
             error!("Error inserting new event {:?}", ex);
         }
 
-        // wait until hearbeat interval expires
+        // wait until heartbeat interval expires
         debug!("{}: wait heartbeat expires", me.clone());
         block_on(async {
             ticker.as_mut().await;
