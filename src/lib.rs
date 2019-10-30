@@ -1,5 +1,6 @@
 #![feature(try_trait)]
 #![recursion_limit = "1024000"]
+#![allow(clippy::type_complexity)]
 #[global_allocator]
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
@@ -204,7 +205,8 @@ where
         debug!("{}: proc_a loop", me.clone());
         // check if shutdown() has been called
         debug!("{} checking quit condition", me.clone());
-        if { core.read().unwrap().check_quit() } {
+        let quit = { core.read().unwrap().check_quit() };
+        if quit {
             debug!("{}: terminating proc_a", me.clone());
             // terminating
             // FIXME: need to be implemented

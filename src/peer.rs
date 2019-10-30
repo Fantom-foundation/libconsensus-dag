@@ -125,6 +125,7 @@ where
     pub(crate) fn get_public_key(&self) -> PK {
         self.pub_key.clone()
     }
+    #[allow(dead_code)]
     pub(crate) fn set_public_key(&mut self, key: PK) {
         self.pub_key = key;
     }
