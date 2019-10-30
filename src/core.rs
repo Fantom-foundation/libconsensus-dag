@@ -15,12 +15,12 @@ use libcommon_rs::data::DataType;
 use libcommon_rs::peer::Peer;
 use libcommon_rs::peer::PeerId;
 use libcommon_rs::peer::PeerList;
-use libconsensus::errors::Error::AtMaxVecCapacity;
 use libconsensus::errors::Result as BaseResult;
 use libhash_sha3::Hash as EventHash;
 use libsignature::PublicKey;
 use libsignature::SecretKey;
 use libsignature::Signature;
+use std::cmp::Ordering;
 use std::sync::Arc;
 use std::sync::RwLock;
 
@@ -54,7 +54,7 @@ where
     PK: PublicKey,
     Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK>,
 {
-    /// Defines maximum number of transactions in a single event
+    // Defines maximum number of transactions in a single event
     const TRANSACTIONS_LIMIT: usize = 16000;
 
     pub(crate) fn new(conf: DAGconfig<P, Data, SK, PK>) -> DAGcore<P, Data, SK, PK, Sig> {
@@ -113,7 +113,7 @@ where
         }
         core
     }
-    pub fn check_quit(&mut self) -> bool {
+    pub fn check_quit(&self) -> bool {
         self.shutdown
     }
     pub(crate) fn set_shutdown(&mut self, shutdown: bool) {
@@ -133,10 +133,6 @@ where
         self.lamport_time
     }
     pub(crate) fn add_transaction(&mut self, data: Data) -> BaseResult<()> {
-        // Vec::push() panics when number of elements overflows `usize`
-        if self.tx_pool.len() == std::usize::MAX {
-            return Err(AtMaxVecCapacity.into());
-        }
         self.tx_pool.push(data);
         Ok(())
     }
@@ -154,10 +150,6 @@ where
     //        &mut self,
     //        tx: InternalTransaction<P, PK>,
     //    ) -> Result<()> {
-    //        // Vec::push() panics when number of elements overflows `usize`
-    //        if self.internal_tx_pool.len() == std::usize::MAX {
-    //            return Err(AtMaxVecCapacity.into());
-    //        }
     //        self.internal_tx_pool.push(tx);
     //        Ok(())
     //    }
@@ -177,7 +169,7 @@ where
     }
     pub(crate) fn check_event(&self, event: &Event<Data, P, PK, Sig>) -> Result<bool> {
         // FIXME: implement event verification:
-        // - self-parant must be the last known event of the creator with height one minus height of the event
+        // - self-parеnt must be the last known event of the creator with height one minus height of the event
         // - all signatures must be verified positively
         for (signatory, signature) in event.signatures.iter() {
             let peer = { self.conf.read().unwrap().peers.find_peer(signatory)? };
@@ -201,33 +193,40 @@ where
                 store.get_flag_table(&other_parent)?,
             )
         };
+        debug!("{}: * event and ft read", self.me_a());
         let root: bool; // = false;
         let frame: FrameNumber /* FrameNumber::default() */ =
-            if self_parent_event.frame_number == other_parent_event.frame_number {
-                let root_flag_table = strict_merge_flag_table(
-                    &self_parent_ft,
-                    &other_parent_ft,
-                    self_parent_event.frame_number,
-                );
-                let creator_root_flag_table = {
-                    let store = self.store.read().unwrap();
-                    store.derive_creator_flag_table(&root_flag_table)
-                };
-                let root_majority = { self.conf.read().unwrap().peers.root_majority() };
-                if creator_root_flag_table.len() >= root_majority {
-                    root = true;
-                    self_parent_event.frame_number + 1
-                } else {
+            match self_parent_event.frame_number.cmp(&other_parent_event.frame_number) {
+                Ordering::Equal => {
+                    let root_flag_table = strict_merge_flag_table(
+                        &self_parent_ft,
+                        &other_parent_ft,
+                        self_parent_event.frame_number,
+                    );
+                    let creator_root_flag_table = {
+                        let store = self.store.read().unwrap();
+                        store.derive_creator_flag_table(&root_flag_table, self_parent_event.frame_number)
+                    };
+                    let root_majority = { self.conf.read().unwrap().peers.root_majority() };
+                    if creator_root_flag_table.len() >= root_majority {
+                        root = true;
+                        self_parent_event.frame_number + 1
+                    } else {
+                        root = false;
+                        self_parent_event.frame_number
+                    }
+                },
+                Ordering::Greater => {
                     root = false;
                     self_parent_event.frame_number
-                }
-            } else if self_parent_event.frame_number > other_parent_event.frame_number {
-                root = false;
-                self_parent_event.frame_number
-            } else {
-                root = true;
-                other_parent_event.frame_number
+                },
+                Ordering::Less => {
+                    root = true;
+                    other_parent_event.frame_number
+                },
             };
+
+        debug!("{}: * got frame number", self.me_a());
         event.frame_number = frame;
         let first_not_finalised_frame = match self.last_finalised_frame {
             Some(x) => x + 1,
@@ -235,6 +234,7 @@ where
         };
         let mut visibilis_flag_table =
             open_merge_flag_table(&self_parent_ft, &other_parent_ft, first_not_finalised_frame);
+        debug!("{}: * got visibilis ft", self.me_a());
         if root {
             visibilis_flag_table.insert(event_hash.clone(), frame);
         }
@@ -244,12 +244,13 @@ where
                 .unwrap()
                 .set_flag_table(&event_hash, &visibilis_flag_table)?;
         }
+        debug!("{}: * sign event", self.me_a());
         {
             let cfg = self.conf.read().unwrap();
             let signature = Sig::sign(event_hash, cfg.get_public_key(), cfg.get_secret_key())?;
             event
                 .signatures
-                .insert(cfg.peers.get_creator_id(), signature.clone());
+                .insert(cfg.peers.get_creator_id(), signature);
         }
         debug!("{}: * insert event: {}", self.me_a(), event.clone());
 
@@ -258,7 +259,7 @@ where
         }
         let creator_visibilis_flag_table = {
             let store = self.store.read().unwrap();
-            store.derive_creator_flag_table(&visibilis_flag_table)
+            store.derive_creator_flag_table(&visibilis_flag_table, first_not_finalised_frame + 1)
         };
         let peer_size = { self.conf.read().unwrap().peers.len() };
         debug!(
@@ -274,23 +275,28 @@ where
             creator_flag_table_fmt(&creator_visibilis_flag_table)
         );
         if peer_size == creator_visibilis_flag_table.len() {
-            let frame_upto = min_frame(&visibilis_flag_table);
+            let frame_upto = min_frame(&creator_visibilis_flag_table);
             debug!(
                 "{}: first not finalised frame:{}; frame up to: {}",
                 self.me_a(),
                 first_not_finalised_frame,
                 frame_upto
             );
-            for frame in first_not_finalised_frame..(frame_upto + 1) {
+            for frame in first_not_finalised_frame..frame_upto {
                 //self.finalise_frame(frame)
                 {
                     let mut store = self.store.write().unwrap();
                     let mut frame_itself = store.get_frame(frame)?;
                     frame_itself.finalise();
+                    debug!(
+                        "{}: +finalised frame {}: {}",
+                        self.me_a(),
+                        frame,
+                        frame_itself.clone()
+                    );
                     store.set_frame(frame, frame_itself)?;
                 }
                 self.last_finalised_frame = Some(frame);
-                debug!("{}: finalised frame: {}", self.me_a(), frame);
                 // notify consumer on next transaction in consensus availability
                 if let Some(waker) = { self.conf.write().unwrap().waker.take() } {
                     debug!("{}: calling waker", self.me_a());

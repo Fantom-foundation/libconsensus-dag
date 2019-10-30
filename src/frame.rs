@@ -1,4 +1,6 @@
 use crate::lamport_time::LamportTime;
+use core::fmt::Display;
+use core::fmt::Formatter;
 use libhash_sha3::Hash as EventHash;
 use serde::{Deserialize, Serialize};
 
@@ -20,6 +22,16 @@ impl Default for Frame {
         Frame {
             events: Vec::with_capacity(1),
         }
+    }
+}
+
+impl Display for Frame {
+    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
+        write!(f, "[")?;
+        for e in self.events.iter() {
+            write!(f, "({};{})", e.hash, e.lamport_time)?;
+        }
+        write!(f, "[")
     }
 }
 

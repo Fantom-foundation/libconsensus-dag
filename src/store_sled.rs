@@ -54,8 +54,7 @@ where
         })
     }
 
-    // function set_event() writes Event into storage; returns True on success and
-    // False on failure
+    // function set_event() writes Event into storage
     fn set_event(&mut self, e: Event<D, P, PK, Sig>) -> Result<()> {
         let e_bytes = serialize(&e)?;
         // Store serialized event with hash as a key.

@@ -125,6 +125,7 @@ where
     pub(crate) fn get_public_key(&self) -> PK {
         self.pub_key.clone()
     }
+    #[allow(dead_code)]
     pub(crate) fn set_public_key(&mut self, key: PK) {
         self.pub_key = key;
     }
@@ -254,9 +255,6 @@ where
     }
 
     fn add(&mut self, p: DAGPeer<Pid, PK>) -> std::result::Result<(), Error> {
-        if self.peers.len() == std::usize::MAX {
-            return Err(Error::Base(AtMaxVecCapacity));
-        }
         self.peers.push(p);
         self.n = self.peers.len();
         self.r = self.n >> 1;
@@ -285,16 +283,7 @@ where
         &mut self.peers
     }
     fn sort_peers(&mut self) {
-        self.peers_mut().sort_by(|a, b| {
-            use std::cmp::Ordering;
-            if a.id < b.id {
-                Ordering::Less
-            } else if a.id > b.id {
-                Ordering::Greater
-            } else {
-                Ordering::Equal
-            }
-        });
+        self.peers_mut().sort_by(|a, b| a.id.cmp(&b.id));
         self.current = match self.peers.iter().position(|x| x.id == self.creator) {
             Some(p) => p,
             None => 0, //panic!("creator not found in the peers!"),
@@ -306,7 +295,7 @@ where
     }
     pub fn next_peer(&mut self) -> DAGPeer<P, PK> {
         // we assume the very first peer in the vector is one
-        // cotrresponding to the current node, so the value of `current`
+        // corresponding to the current node, so the value of `current`
         // is always 0 and omitted here.
         //let next = 1 + self.r % (self.n - 1);
         let next = (self.current + self.r) % self.n;
