@@ -712,7 +712,6 @@ mod transactions;
 #[cfg(test)]
 mod tests {
     use core::fmt::{Display, Formatter};
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     use futures::executor::block_on;
     use futures::StreamExt;
@@ -745,14 +744,14 @@ mod tests {
         }
     }
 
-    impl From<i8> for Data {
-        fn from(i: i8) -> Data {
-            Data { byte: i }
+    impl From<usize> for Data {
+        fn from(i: usize) -> Data {
+            Data { byte: i as i8 }
         }
     }
 
     #[test]
-    fn test_initialise_network() {
+    fn test_vectorised_network() {
         env_logger::init();
         //        syslog::init(
         //            syslog::Facility::LOG_USER,
@@ -761,100 +760,71 @@ mod tests {
         //        )
         //        .unwrap();
         const N: usize = 5;
-
-        let mut next_port: u16 = 9001;
-
-        let _default_kp = Signature::<EventHash>::generate_key_pair().unwrap();
-        let mut peer_to_kp: Vec<((PublicKey, SecretKey), SocketAddr)> = vec![
-            (
-                (_default_kp.0, _default_kp.1),
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), next_port)
-            );
-            N
-        ];
-
-        let peer_list: DAGPeerList<Id, PublicKey> = {
-            let mut _peer_list = DAGPeerList::<Id, PublicKey>::default();
-            let _: Vec<()> = (0..N)
-                .map(|i| {
-                    let kp = Signature::<EventHash>::generate_key_pair().unwrap();
-                    let request_addr =
-                        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), next_port);
-                    let mut peer =
-                        DAGPeer::<Id, PublicKey>::new(kp.0.clone(), request_addr.to_string());
-                    peer.set_public_key(kp.0.clone());
-                    _peer_list.add(peer).unwrap();
-                    peer_to_kp[i] = (kp, request_addr);
-                    next_port += 1;
-                    ()
-                })
-                .collect();
-            _peer_list
-        };
-
-        let mut dags: Vec<DAG<Id, Data, SecretKey, PublicKey, Signature<EventHash>>> = (0..N)
-            .map(|i| {
-                let (kp, request_addr) = &peer_to_kp[i];
-                next_port += 1;
-                let mut reply_addr: SocketAddr = request_addr.clone();
-                reply_addr.set_port(next_port);
-
-                println!(
-                    "`consensus_config.request_addr`:\t {}\n`consensus_config.reply_addr`:\t\t {}",
-                    request_addr.to_string(),
-                    reply_addr.to_string()
-                );
-
-                next_port += 1;
-
-                let mut consensus_config = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
-                consensus_config.request_addr = request_addr.to_string();
-                consensus_config.reply_addr = reply_addr.to_string();
-                consensus_config.transport_type = libtransport::TransportType::TCP;
-                consensus_config.store_type = crate::store::StoreType::Sled;
-                consensus_config.creator = kp.0.clone();
-                consensus_config.public_key = kp.0.clone();
-                consensus_config.secret_key = kp.1.clone();
-                consensus_config.peers = peer_list.clone();
-
-                DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config)
-                    .unwrap()
-            })
-            .collect();
-
-        let data: Vec<Data> = vec![0; N]
-            .iter()
-            .map(|i| Data {
-                byte: (i + 1) as i8,
-            })
-            .collect();
+        const BASE_PORT: usize = 10001;
+        let mut kp: Vec<(PublicKey, SecretKey)> = Vec::with_capacity(N);
+        let mut peer_list = DAGPeerList::<Id, PublicKey>::default();
+        let mut dag: Vec<DAG<Id, Data, SecretKey, PublicKey, Signature<EventHash>>> =
+            Vec::with_capacity(N);
+        let mut data: Vec<Data> = Vec::with_capacity(N);
 
         for i in 0..N {
-            dags[i].send_transaction(data[i].clone()).unwrap();
+            kp.push(Signature::<EventHash>::generate_key_pair().unwrap());
+            let mut peer = DAGPeer::<Id, PublicKey>::new(
+                kp[i].0.clone(),
+                format!("127.0.0.1:{}", BASE_PORT + 2 * i).to_string(),
+            );
+            peer.set_public_key(kp[i].0.clone());
+            peer_list.add(peer).unwrap();
+            data.push(i.into());
+        }
+        for i in 0..N {
+            let mut consensus_config = DAGconfig::<Id, Data, SecretKey, PublicKey>::new();
+            consensus_config.request_addr = format!("127.0.0.1:{}", BASE_PORT + 2 * i).to_string();
+            consensus_config.reply_addr =
+                format!("127.0.0.1:{}", BASE_PORT + 2 * i + 1).to_string();
+            consensus_config.transport_type = libtransport::TransportType::TCP;
+            consensus_config.store_type = crate::store::StoreType::Sled;
+            consensus_config.creator = kp[i].0.clone();
+            consensus_config.public_key = kp[i].0.clone();
+            consensus_config.secret_key = kp[i].1.clone();
+            consensus_config.peers = peer_list.clone();
+            dag.push(
+                DAG::<Id, Data, SecretKey, PublicKey, Signature<EventHash>>::new(consensus_config)
+                    .unwrap(),
+            );
+        }
+
+        for i in 0..N {
+            dag[i].send_transaction(data[i].clone()).unwrap();
             println!("d{} transaction sent", data[i]);
         }
 
         let mut res1: Vec<Data> = vec![Data { byte: 0 }; N];
 
         block_on(async {
-            // res1 = res1.iter().map(|data| {
-
             for i in 0..N {
-                match dags[0].next().await {
-                    Some(d) => {
-                        println!("DAG1: data[{}] OK", i);
-                        res1[i] = d;
+                match i {
+                    0 => {
+                        for i in 0..N {
+                            match dag[0].next().await {
+                                Some(d) => {
+                                    println!("DAG1: data[{}] OK", i);
+                                    res1[i] = d;
+                                }
+                                None => panic!("unexpected None"),
+                            }
+                        }
                     }
-                    None => panic!("unexpected None"),
+                    x => {
+                        for i in 0..N {
+                            // check DAG2
+                            match dag[x].next().await {
+                                Some(d) => assert_eq!(d, res1[i]),
+                                None => panic!("unexpected None in dags[{}]", i),
+                            };
+                        }
+                    }
                 }
-            }
-
-            for i in 1..N {
-                // check DAG2
-                match dags[i].next().await {
-                    Some(d) => assert_eq!(d, res1[0]),
-                    None => panic!("unexpected None in dags[{}]", i),
-                };
             }
         });
 
@@ -863,7 +833,7 @@ mod tests {
         println!("Shutting down DAGs");
 
         for i in 0..N {
-            dags[i].shutdown().unwrap();
+            dag[i].shutdown().unwrap();
         }
     }
 }
