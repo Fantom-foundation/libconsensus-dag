@@ -41,10 +41,10 @@ where
             .print_profile_on_drop(true);
         let ft_config = sled::Config::new()
             .path(base_path.join("flag_tables"))
-            .print_profile_on_drop(true); // if true, gives summary of latency historgrams
+            .print_profile_on_drop(true); // if true, gives summary of latency histograms
         let frame_config = sled::Config::new()
             .path(base_path.join("frames"))
-            .print_profile_on_drop(true); // if true, gives summary of latency historgrams
+            .print_profile_on_drop(true); // if true, gives summary of latency histograms
 
         Ok(SledStore {
             event: event_config.open()?,
