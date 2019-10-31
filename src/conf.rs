@@ -1,9 +1,9 @@
 // Config module
 
 use crate::peer::DAGPeerList;
-use crate::store::StoreType;
 use futures::task::Waker;
 use libcommon_rs::peer::{PeerId, PeerList};
+use libcommon_rs::store::StoreType;
 use libconsensus::ConsensusConfiguration;
 use libsignature::PublicKey;
 use libsignature::SecretKey;

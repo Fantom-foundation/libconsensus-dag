@@ -15,12 +15,6 @@ use libsignature::Signature;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-#[derive(Clone)]
-pub enum StoreType {
-    Unknown,
-    Sled,
-}
-
 pub(crate) trait DAGstore<Data, P, PK, Sig>: Send + Sync
 where
     Data: Serialize + DeserializeOwned + Send + Clone,

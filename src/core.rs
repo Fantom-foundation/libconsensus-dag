@@ -61,8 +61,8 @@ where
         let store_type = conf.store_type.clone();
         let store = {
             match store_type {
-                crate::store::StoreType::Unknown => panic!("unknown DAG store"),
-                crate::store::StoreType::Sled => {
+                libcommon_rs::store::StoreType::Unknown => panic!("unknown DAG store"),
+                libcommon_rs::store::StoreType::Sled => {
                     let path_buf = conf.store_dir.join(conf.creator.to_string());
                     <SledStore as DAGstore<Data, P, PK, Sig>>::new(path_buf.as_path()).unwrap()
                 }

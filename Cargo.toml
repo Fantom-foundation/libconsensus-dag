@@ -1,6 +1,6 @@
 [package]
 name = "libconsensus-dag"
-version = "0.0.16"
+version = "0.0.17"
 authors = ["Samuel Marks <@SamuelMarks>"]
 edition = "2018"
 
@@ -20,7 +20,7 @@ to_vec = "0.1.0"
 libconsensus = { git = "https://github.com/Fantom-foundation/libconsensus", version="~0.0.7" }
 libtransport = { git = "https://github.com/Fantom-foundation/libtransport", version="~0.0.4" }
 libtransport-tcp = { git = "https://github.com/Fantom-foundation/libtransport-tcp", version="~0.0.6" }
-libcommon-rs = { git = "https://github.com/Fantom-foundation/libcommon-rs" }
+libcommon-rs = { git = "https://github.com/Fantom-foundation/libcommon-rs", version="~0.0.2" }
 futures-preview = { version = "0.3.0-alpha.19", features = ["compat"] }
 libhash = { git = "https://github.com/Fantom-foundation/libhash" }
 libhash-sha3 = { git = "https://github.com/Fantom-foundation/libhash-sha3", version="~0.1.1" }

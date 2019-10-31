@@ -783,7 +783,7 @@ mod tests {
             consensus_config.reply_addr =
                 format!("127.0.0.1:{}", BASE_PORT + 2 * i + 1).to_string();
             consensus_config.transport_type = libtransport::TransportType::TCP;
-            consensus_config.store_type = crate::store::StoreType::Sled;
+            consensus_config.store_type = libcommon_rs::store::StoreType::Sled;
             consensus_config.creator = kp[i].0.clone();
             consensus_config.public_key = kp[i].0.clone();
             consensus_config.secret_key = kp[i].1.clone();
