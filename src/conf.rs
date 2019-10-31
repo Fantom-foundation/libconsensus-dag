@@ -82,7 +82,7 @@ where
             request_addr: "localhost:9000".to_string(),
             reply_addr: "localhost:12000".to_string(),
             heartbeat: 1000,
-            proc_a_delay: 1000,
+            proc_a_delay: 3000,
             transport_type: TransportType::Unknown,
             store_type: StoreType::Unknown,
             store_dir: PathBuf::from("./sled_store"),
