@@ -415,7 +415,7 @@ fn procedure_b<P, D, SK, PK, Sig>(
     });
 }
 
-impl<P, D, SK, PK, Sig> Consensus<'_, D> for DAG<P, D, SK, PK, Sig>
+impl<P, D, SK, PK, Sig> Consensus<'_, D, P> for DAG<P, D, SK, PK, Sig>
 where
     P: PeerId + 'static,
     D: DataType + 'static,
@@ -596,7 +596,7 @@ where
     PK: PublicKey,
     Sig: Signature<Hash = EventHash, PublicKey = PK, SecretKey = SK>,
 {
-    type Item = Data;
+    type Item = (Data, P);
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let myself = Pin::get_mut(self);
         let me = {
@@ -668,7 +668,7 @@ where
             let n_tx = event.transactions.len();
             debug!("o {}: n_tx:{}", me.clone(), n_tx);
             if n_tx > 0 {
-                data = Some(event.transactions.swap_remove(current_tx));
+                data = Some((event.transactions.swap_remove(current_tx), event.creator));
             } else {
                 debug!("o {}: event with no txs", me);
             }
@@ -807,7 +807,7 @@ mod tests {
                     0 => {
                         for i in 0..N {
                             match dag[0].next().await {
-                                Some(d) => {
+                                Some((d, _p)) => {
                                     println!("DAG1: data[{}] OK", i);
                                     res1[i] = d;
                                 }
@@ -819,7 +819,7 @@ mod tests {
                         for i in 0..N {
                             // check DAG2
                             match dag[x].next().await {
-                                Some(d) => assert_eq!(d, res1[i]),
+                                Some((d, _p)) => assert_eq!(d, res1[i]),
                                 None => panic!("unexpected None in dags[{}]", i),
                             };
                         }
